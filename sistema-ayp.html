@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" onerror="window.__lucideFailed=true"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" onerror="window.__chartFailed=true"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 :root{
   --bg:#f8f8f8; --surface:#ffffff; --surface-2:#f3f3f5;
@@ -227,36 +228,30 @@ textarea.input{resize:vertical;min-height:64px}
 
 const SUPA_URL  = "https://xfmatolvijmnvtrtidwu.supabase.co";
 const SUPA_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmbWF0b2x2aWptbnZ0cnRpZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMTIyODEsImV4cCI6MjA5NTU4ODI4MX0.ailruytswxcqPJVHUhYYETLhWdpbbp1ZEOfyZb9SY7U";
-const HEADERS   = {"Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY};
 
-/* ---------- Supabase REST helpers ---------- */
-async function sbGet(table, params){
-  const q = params ? "?"+params : "";
-  const r = await fetch(SUPA_URL+"/rest/v1/"+table+q, {headers:{...HEADERS,"Prefer":"return=representation"}});
-  if(!r.ok) throw new Error(await r.text());
-  return r.json();
+/* ---------- Supabase SDK ---------- */
+const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+async function sbGet(table, opts){
+  let q = supa.from(table).select('*');
+  if(opts && opts.order) q = q.order(opts.order, {ascending: opts.asc !== false});
+  const {data, error} = await q;
+  if(error) throw new Error(error.message);
+  return data;
 }
 async function sbInsert(table, body){
-  const r = await fetch(SUPA_URL+"/rest/v1/"+table, {
-    method:"POST", headers:{...HEADERS,"Prefer":"return=representation"},
-    body: JSON.stringify(body)
-  });
-  if(!r.ok) throw new Error(await r.text());
-  return r.json();
+  const {data, error} = await supa.from(table).insert(Array.isArray(body)?body:[body]).select();
+  if(error) throw new Error(error.message);
+  return data;
 }
 async function sbUpdate(table, id, body){
-  const r = await fetch(SUPA_URL+"/rest/v1/"+table+"?id=eq."+id, {
-    method:"PATCH", headers:{...HEADERS,"Prefer":"return=representation"},
-    body: JSON.stringify(body)
-  });
-  if(!r.ok) throw new Error(await r.text());
-  return r.json();
+  const {data, error} = await supa.from(table).update(body).eq('id', id).select();
+  if(error) throw new Error(error.message);
+  return data;
 }
 async function sbDelete(table, id){
-  const r = await fetch(SUPA_URL+"/rest/v1/"+table+"?id=eq."+id, {
-    method:"DELETE", headers:HEADERS
-  });
-  if(!r.ok) throw new Error(await r.text());
+  const {error} = await supa.from(table).delete().eq('id', id);
+  if(error) throw new Error(error.message);
 }
 
 /* ---------- Utilidades ---------- */
@@ -281,23 +276,26 @@ function setSyncStatus(s){ // 'ok'|'syncing'|'error'
 /* ---------- Estado en memoria ---------- */
 let DB = { productos:[], entidades:[], ventas:[], compras:[], cuentas:[], abonos:[] };
 
-/* ---------- Carga inicial ---------- */
+/* ---------- Carga inicial (paralela) ---------- */
 async function loadAll(){
-  setLoading('Cargando productos…');
-  DB.productos  = await sbGet('ayp_productos','order=nombre.asc');
-  setLoading('Cargando entidades…');
-  DB.entidades  = await sbGet('ayp_entidades','order=nombre.asc');
-  setLoading('Cargando ventas…');
-  const ventas  = await sbGet('ayp_ventas','order=fecha.desc');
-  const vlineas = await sbGet('ayp_venta_lineas','order=venta_id.asc');
-  setLoading('Cargando compras…');
-  const compras = await sbGet('ayp_compras','order=fecha.desc');
-  const clineas = await sbGet('ayp_compra_lineas','order=compra_id.asc');
-  setLoading('Cargando cuentas y abonos…');
-  const cuentas = await sbGet('ayp_cuentas','order=fecha_origen.desc');
-  const abonos  = await sbGet('ayp_abonos','order=fecha.asc');
+  const [productos, entidades, ventas, vlineas, compras, clineas, cuentas, abonos] = await Promise.all([
+    sbGet('ayp_productos',   {order:'nombre',  asc:true}),
+    sbGet('ayp_entidades',   {order:'nombre',  asc:true}),
+    sbGet('ayp_ventas',      {order:'fecha',   asc:false}),
+    sbGet('ayp_venta_lineas',{order:'venta_id',asc:true}),
+    sbGet('ayp_compras',     {order:'fecha',   asc:false}),
+    sbGet('ayp_compra_lineas',{order:'compra_id',asc:true}),
+    sbGet('ayp_cuentas',     {order:'fecha_origen',asc:false}),
+    sbGet('ayp_abonos',      {order:'fecha',   asc:true}),
+  ]);
 
-  // Mapear snake_case → camelCase y enriquecer con lineas/abonos
+  DB.productos = productos.map(p=>({
+    id:p.id, nombre:p.nombre, categoria:p.categoria,
+    precioCostoRef:+p.precio_costo_ref, activo:p.activo
+  }));
+  DB.entidades = entidades.map(e=>({
+    id:e.id, nombre:e.nombre, tipo:e.tipo, telefono:e.telefono, notas:e.notas
+  }));
   DB.ventas = ventas.map(v=>({
     id:v.id, entidadId:v.entidad_id, fecha:v.fecha, condicion:v.condicion,
     anticipo:+v.anticipo, total:+v.total, cancelado:v.cancelado,
@@ -319,50 +317,34 @@ async function loadAll(){
       id:a.id, cuentaId:a.cuenta_id, monto:+a.monto, fecha:a.fecha, nota:a.nota
     }))
   }));
-  DB.productos = DB.productos.map(p=>({
-    id:p.id, nombre:p.nombre, categoria:p.categoria,
-    precioCostoRef:+p.precio_costo_ref, activo:p.activo
-  }));
-  DB.entidades = DB.entidades.map(e=>({
-    id:e.id, nombre:e.nombre, tipo:e.tipo, telefono:e.telefono, notas:e.notas
-  }));
 }
 
-/* ---------- Realtime ---------- */
+/* ---------- Realtime (SDK oficial) ---------- */
 function initRealtime(){
-  // Supabase Realtime via WebSocket
-  const ws_url = SUPA_URL.replace('https','wss') + '/realtime/v1/websocket?apikey=' + SUPA_KEY + '&vsn=1.0.0';
-  let ws;
-  function connect(){
-    ws = new WebSocket(ws_url);
-    ws.onopen = ()=>{
-      setSyncStatus('ok');
-      // Subscribe to all ayp_ tables
-      ['ayp_productos','ayp_entidades','ayp_ventas','ayp_venta_lineas',
-       'ayp_compras','ayp_compra_lineas','ayp_cuentas','ayp_abonos'].forEach(t=>{
-        ws.send(JSON.stringify({
-          topic:`realtime:public:${t}`, event:'phx_join',
-          payload:{config:{broadcast:{self:true},presence:{key:''},postgres_changes:[{event:'*',schema:'public',table:t}]}},
-          ref:'1'
-        }));
-      });
-    };
-    ws.onmessage = async (e)=>{
-      const msg = JSON.parse(e.data);
-      if(msg.event==='postgres_changes' || (msg.payload && msg.payload.data)){
-        setSyncStatus('syncing');
-        try {
-          await loadAll();
-          setSyncStatus('ok');
-          render();
-          icons();
-        } catch(err){ setSyncStatus('error'); }
-      }
-    };
-    ws.onclose = ()=>{ setSyncStatus('error'); setTimeout(connect, 3000); };
-    ws.onerror = ()=>{ setSyncStatus('error'); };
+  const tablas = ['ayp_productos','ayp_entidades','ayp_ventas','ayp_venta_lineas',
+                  'ayp_compras','ayp_compra_lineas','ayp_cuentas','ayp_abonos'];
+  let reloadTimer = null;
+  function scheduleReload(){
+    // Debounce: si llegan varios cambios juntos, espera 300ms y recarga una sola vez
+    clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(async ()=>{
+      setSyncStatus('syncing');
+      try{
+        await loadAll();
+        render();
+        icons();
+        setSyncStatus('ok');
+      }catch(e){ setSyncStatus('error'); }
+    }, 300);
   }
-  connect();
+  tablas.forEach(tabla=>{
+    supa.channel('ayp-changes-'+tabla)
+      .on('postgres_changes', {event:'*', schema:'public', table:tabla}, scheduleReload)
+      .subscribe(status=>{
+        if(status==='SUBSCRIBED') setSyncStatus('ok');
+        if(status==='CHANNEL_ERROR') setSyncStatus('error');
+      });
+  });
 }
 
 /* ---------- Seed demo (solo si tablas vacías) ---------- */
@@ -925,8 +907,8 @@ async function submitTrans(kind){
       // Delete old lines and re-insert
       const lineTable=isV?'ayp_venta_lineas':'ayp_compra_lineas';
       const lineFK=isV?'venta_id':'compra_id';
-      const r=await fetch(SUPA_URL+'/rest/v1/'+lineTable+'?'+lineFK+'=eq.'+formEditingId,{method:'DELETE',headers:HEADERS});
-      if(!r.ok) throw new Error(await r.text());
+      const {error:delErr} = await supa.from(lineTable).delete().eq(lineFK, formEditingId);
+      if(delErr) throw new Error(delErr.message);
       await sbInsert(lineTable, lineas.map(l=>({id:uid(),[lineFK]:formEditingId,producto_id:l.productoId,cantidad:l.cantidad,precio_unit:l.precioUnit,subtotal:l.subtotal})));
       // Update cuenta
       const cta=DB.cuentas.find(ct=>ct.refId===formEditingId);
