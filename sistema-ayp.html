@@ -267,8 +267,8 @@ function icons(){
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function setLoading(msg){ document.getElementById('loadingMsg').textContent = msg||'Cargando…'; }
-function showErr(msg){ const b=document.getElementById('errBanner'); b.querySelector('#errMsg').textContent=msg; b.classList.add('show'); }
-function hideErr(){ document.getElementById('errBanner').classList.remove('show'); }
+function showErr(msg){ const b=document.getElementById('errBanner'); if(!b) return; const s=b.querySelector('#errMsg'); if(s) s.textContent=msg; b.classList.add('show'); }
+function hideErr(){ const b=document.getElementById('errBanner'); if(b) b.classList.remove('show'); }
 function setSyncStatus(s){ // 'ok'|'syncing'|'error'
   const dot=document.getElementById('syncDot'), lbl=document.getElementById('syncLabel');
   if(s==='ok'){ dot.className='sync-dot'; lbl.textContent='Conectado'; }
@@ -466,8 +466,11 @@ function setTop(title,sub,actions){
   icons();
 }
 function render(){
-  hideErr();
   const c=document.getElementById('content');
+  // Salvar el banner ANTES de que cualquier render limpie el DOM
+  const banner=document.getElementById('errBanner');
+  if(banner) banner.remove(); // sacarlo del DOM temporalmente
+  hideErr();
   if(current==='dashboard') renderDashboard(c);
   else if(current==='productos') renderProductos(c);
   else if(current==='historial') renderHistorial(c);
@@ -476,9 +479,8 @@ function render(){
   else if(current==='pagos') renderPagos(c);
   else if(current==='movimientos') renderMovimientos(c);
   else if(current==='entidades') renderEntidades(c);
-  // Re-prepend error banner if it got displaced
-  const banner=document.getElementById('errBanner');
-  if(banner && !c.contains(banner)) c.prepend(banner);
+  // Reinyectar el banner al inicio del contenido
+  if(banner) c.prepend(banner);
   icons();
 }
 
