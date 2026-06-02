@@ -1244,11 +1244,49 @@ async function init(){
     document.getElementById('appShell').style.display='flex';
     renderNav(); render(); icons();
     initRealtime();
+    initVisibilityReload();
     setSyncStatus('ok');
   }catch(err){
     document.getElementById('loadingMsg').textContent='Error al conectar con Supabase: '+err.message;
     document.querySelector('.loading-screen .spinner').style.display='none';
   }
+}
+
+/* =========================================================
+   RELOAD AL VOLVER A LA PESTAÑA
+   ========================================================= */
+function initVisibilityReload(){
+  let lastHidden = null;
+
+  // Se dispara cuando el usuario vuelve a esta pestaña
+  document.addEventListener('visibilitychange', async ()=>{
+    if(document.visibilityState === 'visible'){
+      // Solo recarga si estuvo oculta más de 3 segundos
+      const away = lastHidden ? Date.now() - lastHidden : 0;
+      if(away < 3000) return;
+      setSyncStatus('syncing');
+      try{
+        await loadAll();
+        render();
+        setSyncStatus('ok');
+      }catch(e){ setSyncStatus('error'); }
+    } else {
+      lastHidden = Date.now();
+    }
+  });
+
+  // Fallback: también en focus de la ventana (Safari/Firefox)
+  window.addEventListener('focus', async ()=>{
+    if(document.visibilityState !== 'visible') return;
+    const away = lastHidden ? Date.now() - lastHidden : 0;
+    if(away < 3000) return;
+    setSyncStatus('syncing');
+    try{
+      await loadAll();
+      render();
+      setSyncStatus('ok');
+    }catch(e){ setSyncStatus('error'); }
+  });
 }
 
 let tries=0;
