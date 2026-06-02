@@ -182,6 +182,7 @@ textarea.input{resize:vertical;min-height:64px}
   .nav-item{justify-content:center}
   .main{margin-left:64px}
   .content,.topbar{padding-left:18px;padding-right:18px}
+  #dashRent .tbl-wrap{font-size:12px}
 }
 </style>
 </head>
@@ -261,7 +262,13 @@ function fmtInt(n){ return new Intl.NumberFormat('es-MX').format(n||0); }
 function todayISO(){ return new Date().toISOString().slice(0,10); }
 function daysAgoISO(d){ const t=new Date(); t.setDate(t.getDate()-d); return t.toISOString().slice(0,10); }
 function fmtDate(iso){ if(!iso) return '—'; const [y,m,d]=iso.slice(0,10).split('-'); return `${d}/${m}/${y}`; }
-function icons(){ if(!window.__lucideFailed && window.lucide) lucide.createIcons(); }
+let _iconsDebounce=null;
+function icons(){
+  if(!window.__lucideFailed && window.lucide){
+    clearTimeout(_iconsDebounce);
+    _iconsDebounce=setTimeout(()=>lucide.createIcons(),30);
+  }
+}
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function setLoading(msg){ document.getElementById('loadingMsg').textContent = msg||'Cargando…'; }
 function showErr(msg){ const b=document.getElementById('errBanner'); b.querySelector('#errMsg').textContent=msg; b.classList.add('show'); }
@@ -319,31 +326,36 @@ async function loadAll(){
   }));
 }
 
-/* ---------- Realtime (SDK oficial) ---------- */
+/* ---------- Realtime (SDK oficial) — canal único con debounce ---------- */
 function initRealtime(){
   const tablas = ['ayp_productos','ayp_entidades','ayp_ventas','ayp_venta_lineas',
                   'ayp_compras','ayp_compra_lineas','ayp_cuentas','ayp_abonos'];
   let reloadTimer = null;
+  let rendering = false;
   function scheduleReload(){
-    // Debounce: si llegan varios cambios juntos, espera 300ms y recarga una sola vez
+    // Debounce 400ms — un solo reload aunque lleguen N eventos juntos
     clearTimeout(reloadTimer);
     reloadTimer = setTimeout(async ()=>{
+      if(rendering) return;
+      rendering = true;
       setSyncStatus('syncing');
       try{
         await loadAll();
         render();
-        icons();
+        // icons() ya se llama dentro de render(); no duplicar aquí
         setSyncStatus('ok');
       }catch(e){ setSyncStatus('error'); }
-    }, 300);
+      finally{ rendering = false; }
+    }, 400);
   }
+  // Un solo canal que escucha todas las tablas ayp_*
+  const ch = supa.channel('ayp-all-changes');
   tablas.forEach(tabla=>{
-    supa.channel('ayp-changes-'+tabla)
-      .on('postgres_changes', {event:'*', schema:'public', table:tabla}, scheduleReload)
-      .subscribe(status=>{
-        if(status==='SUBSCRIBED') setSyncStatus('ok');
-        if(status==='CHANNEL_ERROR') setSyncStatus('error');
-      });
+    ch.on('postgres_changes', {event:'*', schema:'public', table:tabla}, scheduleReload);
+  });
+  ch.subscribe(status=>{
+    if(status==='SUBSCRIBED') setSyncStatus('ok');
+    if(status==='CHANNEL_ERROR') setSyncStatus('error');
   });
 }
 
@@ -459,8 +471,6 @@ function setTop(title,sub,actions){
 function render(){
   hideErr();
   const c=document.getElementById('content');
-  // Keep error banner
-  const banner = document.getElementById('errBanner');
   if(current==='dashboard') renderDashboard(c);
   else if(current==='productos') renderProductos(c);
   else if(current==='historial') renderHistorial(c);
@@ -469,7 +479,9 @@ function render(){
   else if(current==='pagos') renderPagos(c);
   else if(current==='movimientos') renderMovimientos(c);
   else if(current==='entidades') renderEntidades(c);
-  if(!c.contains(banner)) c.prepend(banner);
+  // Re-prepend error banner if it got displaced
+  const banner=document.getElementById('errBanner');
+  if(banner && !c.contains(banner)) c.prepend(banner);
   icons();
 }
 
@@ -533,31 +545,107 @@ function renderDashboard(c){
       <div class="kpi"><div class="lbl"><i data-lucide="receipt"></i>CxP pendiente</div><div class="val red">${fmt(cxp)}</div><div class="sub">Por pagar (total acumulado)</div></div>
     </div>
     <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:18px;margin-bottom:18px" id="dashCols">
-      <div class="card"><div class="card-head"><h3>Ventas vs. Costos</h3><span class="badge gray">${dashPeriod}</span></div><div class="card-pad"><div style="height:260px"><canvas id="chart"></canvas></div></div></div>
+      <div class="card"><div class="card-head"><h3>Ventas vs. Compras</h3><span class="badge gray">${dashPeriod}</span></div><div class="card-pad"><div style="height:260px"><canvas id="chart"></canvas></div></div></div>
       <div class="card"><div class="card-head"><h3>Productos más vendidos</h3><span class="badge indigo">por monto</span></div><div class="card-pad">${renderRankList(topProds,'indigo',it=>it.monto)}</div></div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px" id="dashCols2">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px" id="dashCols2">
       <div class="card"><div class="card-head"><h3>Top Clientes</h3><span class="badge green">ventas período</span></div><div class="card-pad">${renderRankList(topClientes,'green',it=>it.monto)}</div></div>
       <div class="card"><div class="card-head"><h3>Top Proveedores</h3><span class="badge amber">compras período</span></div><div class="card-pad">${renderRankList(topProvs,'amber',it=>it.monto)}</div></div>
+    </div>
+    <div class="card" id="dashRent">
+      <div class="card-head"><h3>Rentabilidad por producto</h3><span class="badge gray">${dashPeriod} · ventas activas</span></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr>
+          <th>Producto</th><th>Cat.</th>
+          <th class="num">Piezas vend.</th>
+          <th class="num">Ingresos</th>
+          <th class="num">Costo real</th>
+          <th class="num">Utilidad</th>
+          <th class="num">Margen %</th>
+          <th class="num">Stock actual</th>
+        </tr></thead>
+        <tbody>${(()=>{
+          // Build per-product stats from ventasP
+          const byProd={};
+          ventasP.forEach(v=>v.lineas.forEach(l=>{
+            if(!byProd[l.productoId]) byProd[l.productoId]={pz:0,ing:0,costo:0};
+            byProd[l.productoId].pz+=l.cantidad;
+            byProd[l.productoId].ing+=l.subtotal;
+            byProd[l.productoId].costo+=l.cantidad*costoUnitReal(l.productoId);
+          }));
+          const rows=Object.entries(byProd).map(([pid,d])=>{
+            const p=prod(pid); if(!p) return null;
+            const util=d.ing-d.costo;
+            const mg=d.ing>0?(util/d.ing*100):0;
+            const stk=getStock(pid);
+            const mgColor=mg>=30?'var(--green)':mg>=10?'var(--amber)':'var(--red)';
+            return {pid,nombre:p.nombre,cat:p.categoria,pz:d.pz,ing:d.ing,costo:d.costo,util,mg,stk,mgColor};
+          }).filter(Boolean).sort((a,b)=>b.util-a.util);
+          if(!rows.length) return `<tr><td colspan="8"><div class="empty" style="padding:32px 20px"><i data-lucide="bar-chart-2"></i><p>Sin ventas en el período</p></div></td></tr>`;
+          return rows.map(r=>`<tr>
+            <td style="font-weight:600">${esc(r.nombre)}</td>
+            <td><span class="cat-pill cat-${r.cat}">${r.cat}</span></td>
+            <td class="num">${fmtInt(r.pz)}</td>
+            <td class="num">${fmt(r.ing)}</td>
+            <td class="num muted">${fmt(r.costo)}</td>
+            <td class="num" style="font-weight:700;color:${r.util>=0?'var(--green)':'var(--red)'}">${fmt(r.util)}</td>
+            <td class="num"><span style="font-weight:700;color:${r.mgColor}">${r.mg.toFixed(1)}%</span></td>
+            <td class="num" style="${r.stk<=0?'color:var(--red);font-weight:600':'color:var(--text-soft)'}">${fmtInt(r.stk)} pz</td>
+          </tr>`).join('');
+        })()}</tbody>
+      </table></div>
     </div>`;
 
   document.querySelectorAll('#periodSeg button').forEach(b=>b.onclick=()=>{ dashPeriod=b.dataset.p; renderDashboard(c); icons(); });
-  drawChart(ventasP);
-  if(window.innerWidth<880){ document.getElementById('dashCols').style.gridTemplateColumns='1fr'; document.getElementById('dashCols2').style.gridTemplateColumns='1fr'; }
+  drawChart(ventasP, comprasP);
+  if(window.innerWidth<880){
+    document.getElementById('dashCols').style.gridTemplateColumns='1fr';
+    document.getElementById('dashCols2').style.gridTemplateColumns='1fr';
+  }
 }
-function drawChart(ventasP){
+function drawChart(ventasP, comprasP){
   if(window.__chartFailed||!window.Chart){ const cv=document.getElementById('chart'); if(cv) cv.parentElement.innerHTML='<div class="empty"><p>Gráfica no disponible</p></div>'; return; }
   const byMonth=dashPeriod==='todo';
   const buckets={};
-  ventasP.forEach(v=>{ const k=byMonth?v.fecha.slice(0,7):v.fecha; if(!buckets[k]) buckets[k]={vend:0,cost:0}; buckets[k].vend+=v.total; buckets[k].cost+=costoVentaReal(v); });
+  ventasP.forEach(v=>{
+    const k=byMonth?v.fecha.slice(0,7):v.fecha;
+    if(!buckets[k]) buckets[k]={vend:0,cost:0,util:0,comp:0};
+    buckets[k].vend+=v.total;
+    const cv=costoVentaReal(v); buckets[k].cost+=cv; buckets[k].util+=(v.total-cv);
+  });
+  comprasP.forEach(c=>{
+    const k=byMonth?c.fecha.slice(0,7):c.fecha;
+    if(!buckets[k]) buckets[k]={vend:0,cost:0,util:0,comp:0};
+    buckets[k].comp+=compraTotal(c);
+  });
   const keys=Object.keys(buckets).sort();
   const ctx=document.getElementById('chart'); if(!ctx) return;
   if(dashChart){ dashChart.destroy(); dashChart=null; }
   if(!keys.length){ ctx.parentElement.innerHTML='<div class="empty"><p>Sin datos para graficar</p></div>'; return; }
-  dashChart=new Chart(ctx,{type:'bar',data:{labels:keys.map(k=>byMonth?k:k.slice(8)+'/'+k.slice(5,7)),datasets:[
-    {label:'Ventas',data:keys.map(k=>buckets[k].vend),backgroundColor:'#6366f1',borderRadius:5,maxBarThickness:34},
-    {label:'Costo real',data:keys.map(k=>buckets[k].cost),backgroundColor:'#cbd5e1',borderRadius:5,maxBarThickness:34},
-  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,font:{family:'Inter',size:12}}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.raw)}}},scales:{x:{grid:{display:false},ticks:{font:{family:'Inter',size:11}}},y:{beginAtZero:true,ticks:{font:{family:'Inter',size:11},callback:v=>'$'+(v/1000)+'k'},grid:{color:'#f0f0f0'}}}}});
+  const labels=keys.map(k=>byMonth?k:k.slice(8)+'/'+k.slice(5,7));
+  dashChart=new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'Ventas',data:keys.map(k=>buckets[k].vend),backgroundColor:'#6366f1',borderRadius:5,maxBarThickness:30,order:2},
+        {label:'Compras',data:keys.map(k=>buckets[k].comp),backgroundColor:'#f59e0b',borderRadius:5,maxBarThickness:30,order:3},
+        {label:'Utilidad',data:keys.map(k=>buckets[k].util),type:'line',borderColor:'#16a34a',backgroundColor:'#16a34a22',borderWidth:2.5,pointRadius:4,pointBackgroundColor:'#16a34a',tension:0.3,fill:false,order:1},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,font:{family:'Inter',size:12}}},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.raw)}}
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{font:{family:'Inter',size:11}}},
+        y:{beginAtZero:true,ticks:{font:{family:'Inter',size:11},callback:v=>v>=1000?'$'+(v/1000).toFixed(0)+'k':'$'+v},grid:{color:'#f0f0f0'}}
+      }
+    }
+  });
 }
 
 /* =========================================================
