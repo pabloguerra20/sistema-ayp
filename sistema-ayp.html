@@ -460,7 +460,8 @@ function renderNav(){
   document.getElementById('nav').innerHTML='<div class="nav-label">Operación</div>'+VIEWS.map(v=>
     `<button class="nav-item ${current===v.id?'active':''}" data-view="${v.id}"><i data-lucide="${v.icon}"></i><span>${v.label}</span></button>`
   ).join('');
-  document.querySelectorAll('[data-view]').forEach(b=>{ b.classList.toggle('active',b.dataset.view===current); b.onclick=()=>navigate(b.dataset.view); });
+  // Solo clase activa — clicks van por event delegation en sidebar
+  document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===current));
   icons();
 }
 function navigate(view){ current=view; renderNav(); render(); document.querySelector('.content').scrollTop=0; }
@@ -1232,6 +1233,16 @@ function toast(msg,icon){
   t.classList.add('show'); icons(); clearTimeout(toastT);
   toastT=setTimeout(()=>t.classList.remove('show'),2600);
 }
+
+
+/* =========================================================
+   NAV — Event delegation (sobrevive re-renders de lucide)
+   ========================================================= */
+// El script es defer-equivalent (al final del body), sidebar ya existe
+document.querySelector('.sidebar').addEventListener('click', e=>{
+  const btn = e.target.closest('[data-view]');
+  if(btn) navigate(btn.dataset.view);
+});
 
 /* =========================================================
    INIT
