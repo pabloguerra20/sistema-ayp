@@ -277,11 +277,11 @@ function setSyncStatus(s){ // 'ok'|'syncing'|'error'
 }
 
 /* ---------- Estado en memoria ---------- */
-let DB = { productos:[], entidades:[], ventas:[], compras:[], cuentas:[], abonos:[] };
+let DB = { productos:[], entidades:[], ventas:[], compras:[], cuentas:[], abonos:[], gastos:[] };
 
 /* ---------- Carga inicial (paralela) ---------- */
 async function loadAll(){
-  const [productos, entidades, ventas, vlineas, compras, clineas, cuentas, abonos] = await Promise.all([
+  const [productos, entidades, ventas, vlineas, compras, clineas, cuentas, abonos, gastos] = await Promise.all([
     sbGet('ayp_productos',   {order:'nombre',  asc:true}),
     sbGet('ayp_entidades',   {order:'nombre',  asc:true}),
     sbGet('ayp_ventas',      {order:'fecha',   asc:false}),
@@ -290,6 +290,7 @@ async function loadAll(){
     sbGet('ayp_compra_lineas',{order:'compra_id',asc:true}),
     sbGet('ayp_cuentas',     {order:'fecha_origen',asc:false}),
     sbGet('ayp_abonos',      {order:'fecha',   asc:true}),
+    sbGet('ayp_gastos',      {order:'fecha',   asc:false}),
   ]);
 
   DB.productos = productos.map(p=>({
@@ -320,12 +321,15 @@ async function loadAll(){
       id:a.id, cuentaId:a.cuenta_id, monto:+a.monto, fecha:a.fecha, nota:a.nota
     }))
   }));
+  DB.gastos = gastos.map(g=>({
+    id:g.id, fecha:g.fecha, categoria:g.categoria, descripcion:g.descripcion, monto:+g.monto
+  }));
 }
 
 /* ---------- Realtime (SDK oficial) — canal único con debounce ---------- */
 function initRealtime(){
   const tablas = ['ayp_productos','ayp_entidades','ayp_ventas','ayp_venta_lineas',
-                  'ayp_compras','ayp_compra_lineas','ayp_cuentas','ayp_abonos'];
+                  'ayp_compras','ayp_compra_lineas','ayp_cuentas','ayp_abonos','ayp_gastos'];
   let reloadTimer = null;
   let rendering = false;
   function scheduleReload(){
@@ -450,6 +454,8 @@ const VIEWS=[
   {id:'compra',label:'Registrar Compra',icon:'truck'},
   {id:'pagos',label:'Pagos (CxC / CxP)',icon:'wallet'},
   {id:'movimientos',label:'Movimientos',icon:'arrow-left-right'},
+  {id:'gastos',label:'Gastos',icon:'receipt'},
+  {id:'finanzas',label:'Estados Financieros',icon:'bar-chart-2'},
 ];
 let current='dashboard';
 function renderNav(){
@@ -479,6 +485,8 @@ function render(){
   else if(current==='pagos') renderPagos(c);
   else if(current==='movimientos') renderMovimientos(c);
   else if(current==='entidades') renderEntidades(c);
+  else if(current==='gastos') renderGastos(c);
+  else if(current==='finanzas') renderFinanzas(c);
   // Reinyectar el banner al inicio del contenido
   if(banner) c.prepend(banner);
   icons();
@@ -1233,6 +1241,317 @@ function toast(msg,icon){
 }
 
 
+
+/* =========================================================
+   MÓDULO GASTOS — categorías y helpers
+   ========================================================= */
+const CATEGORIAS_GASTO = [
+  {id:'nomina',      label:'Nómina',        color:'#6366f1'},
+  {id:'servicios',   label:'Servicios',     color:'#3b82f6'},
+  {id:'renta',       label:'Renta',         color:'#8b5cf6'},
+  {id:'oficina',     label:'Oficina',       color:'#06b6d4'},
+  {id:'suscripciones',label:'Suscripciones',color:'#f59e0b'},
+  {id:'otros',       label:'Otros gastos',  color:'#94a3b8'},
+];
+function catGasto(id){ return CATEGORIAS_GASTO.find(c=>c.id===id)||{label:id,color:'#94a3b8'}; }
+function gastosEnPeriodo(p){ return DB.gastos.filter(g=>inPeriod(g.fecha,p)); }
+function totalGastosCat(cat,p){ return gastosEnPeriodo(p).filter(g=>g.categoria===cat).reduce((a,g)=>a+g.monto,0); }
+function totalGastos(p){ return gastosEnPeriodo(p).reduce((a,g)=>a+g.monto,0); }
+
+/* =========================================================
+   MÓDULO GASTOS — render
+   ========================================================= */
+let gastosPeriodo = 'mes';
+function renderGastos(c){
+  setTop('Gastos Operativos','Registro de salidas por categoría',
+    `<button class="btn btn-primary" onclick="openGastoModal()"><i data-lucide="plus"></i> Registrar Gasto</button>`);
+
+  const gp = gastosEnPeriodo(gastosPeriodo).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const total = gp.reduce((a,g)=>a+g.monto,0);
+
+  // Resumen por categoría
+  const resumenHTML = CATEGORIAS_GASTO.map(cat=>{
+    const t = gp.filter(g=>g.categoria===cat.id).reduce((a,g)=>a+g.monto,0);
+    if(!t) return '';
+    const pct = total>0?(t/total*100).toFixed(0):0;
+    return `<div class="kpi" style="padding:16px 20px">
+      <div class="lbl" style="color:${cat.color}"><span style="width:8px;height:8px;border-radius:50%;background:${cat.color};display:inline-block;margin-right:6px"></span>${cat.label}</div>
+      <div class="val" style="font-size:1.3rem">${fmt(t)}</div>
+      <div class="sub">${pct}% del total</div>
+    </div>`;
+  }).join('');
+
+  // Tabla de gastos
+  const filasHTML = gp.length ? gp.map(g=>`
+    <tr>
+      <td>${fmtDate(g.fecha)}</td>
+      <td><span class="badge" style="background:${catGasto(g.categoria).color}1a;color:${catGasto(g.categoria).color};border:1px solid ${catGasto(g.categoria).color}33">${catGasto(g.categoria).label}</span></td>
+      <td>${esc(g.descripcion||'—')}</td>
+      <td class="num" style="font-weight:600;color:var(--red)">${fmt(g.monto)}</td>
+      <td style="text-align:right">
+        <button class="btn-icon" onclick="editGastoModal('${g.id}')" title="Editar"><i data-lucide="pencil"></i></button>
+        <button class="btn-icon danger" onclick="deleteGasto('${g.id}')" title="Eliminar"><i data-lucide="trash-2"></i></button>
+      </td>
+    </tr>`).join('')
+  : `<tr><td colspan="5"><div class="empty" style="padding:40px 20px"><i data-lucide="receipt"></i><p>Sin gastos en este período</p></div></td></tr>`;
+
+  const periodos = [{k:'hoy',l:'Hoy'},{k:'semana',l:'Semana'},{k:'mes',l:'Mes'},{k:'todo',l:'Todo'}];
+
+  c.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+      <div class="seg-ctrl" id="gastosSeg">
+        ${periodos.map(p=>`<button data-gp="${p.k}" class="${gastosPeriodo===p.k?'active':''}">${p.l}</button>`).join('')}
+      </div>
+      <div style="font-size:1.1rem;font-weight:700;color:var(--red)">Total: ${fmt(total)}</div>
+    </div>
+    ${resumenHTML ? `<div class="kpi-grid" style="margin-bottom:18px">${resumenHTML}</div>` : ''}
+    <div class="card">
+      <div class="card-head"><h3>Detalle de gastos</h3><span class="badge gray">${gp.length} registros</span></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Fecha</th><th>Categoría</th><th>Descripción</th><th class="num">Monto</th><th></th></tr></thead>
+        <tbody>${filasHTML}</tbody>
+        ${gp.length?`<tfoot><tr><td colspan="3" style="font-weight:600;padding:12px 16px">Total período</td><td class="num" style="font-weight:700;color:var(--red);padding:12px 16px">${fmt(total)}</td><td></td></tr></tfoot>`:''}
+      </table></div>
+    </div>`;
+
+  document.querySelectorAll('#gastosSeg button').forEach(b=>b.onclick=()=>{ gastosPeriodo=b.dataset.gp; renderGastos(c); icons(); });
+  icons();
+}
+
+function openGastoModal(g=null){
+  const isEdit = !!g;
+  openModal(`${isEdit?'Editar':'Registrar'} Gasto`, `
+    <div class="form-group"><label>Fecha</label>
+      <input type="date" id="gFecha" class="input" value="${g?g.fecha:todayISO()}"></div>
+    <div class="form-group"><label>Categoría</label>
+      <select id="gCat" class="input">
+        ${CATEGORIAS_GASTO.map(cat=>`<option value="${cat.id}" ${g&&g.categoria===cat.id?'selected':''}>${cat.label}</option>`).join('')}
+      </select></div>
+    <div class="form-group"><label>Descripción <span style="color:var(--text-soft);font-weight:400">(opcional)</span></label>
+      <input type="text" id="gDesc" class="input" placeholder="Ej: Nómina semana 1, Renta junio…" value="${g?esc(g.descripcion||''):''}"></div>
+    <div class="form-group"><label>Monto</label>
+      <input type="number" id="gMonto" class="input" min="0" step="0.01" placeholder="0.00" value="${g?g.monto:''}"></div>
+  `, async ()=>{
+    const fecha = document.getElementById('gFecha').value;
+    const categoria = document.getElementById('gCat').value;
+    const descripcion = document.getElementById('gDesc').value.trim();
+    const monto = parseFloat(document.getElementById('gMonto').value)||0;
+    if(!fecha||!monto){ alert('Completa fecha y monto'); return; }
+    try{
+      if(isEdit){
+        await sbUpdate('ayp_gastos', g.id, {fecha,categoria,descripcion,monto});
+        toast('Gasto actualizado','check-circle');
+      } else {
+        await sbInsert('ayp_gastos', [{id:uid(),fecha,categoria,descripcion,monto}]);
+        toast('Gasto registrado','check-circle');
+      }
+      await loadAll(); closeModal(); render();
+    }catch(e){ alert('Error: '+e.message); }
+  });
+}
+
+function editGastoModal(id){
+  const g = DB.gastos.find(x=>x.id===id);
+  if(g) openGastoModal(g);
+}
+
+async function deleteGasto(id){
+  if(!confirm('¿Eliminar este gasto?')) return;
+  try{
+    await sbDelete('ayp_gastos', id);
+    await loadAll(); render();
+    toast('Gasto eliminado','trash-2');
+  }catch(e){ alert('Error: '+e.message); }
+}
+
+/* =========================================================
+   MÓDULO ESTADOS FINANCIEROS — render
+   ========================================================= */
+let finPeriodo = 'mes';
+function renderFinanzas(c){
+  setTop('Estados Financieros','P&L · Flujo de efectivo');
+
+  const p = finPeriodo;
+  const ventas = ventasActivas().filter(v=>inPeriod(v.fecha,p));
+  const compras = comprasActivas().filter(x=>inPeriod(x.fecha,p));
+  const gastos  = gastosEnPeriodo(p);
+
+  // ── Ingresos ──
+  const ingresos = ventas.reduce((a,v)=>a+v.total, 0);
+
+  // ── COGS: landed cost real de las ventas del período ──
+  const cogs = ventas.reduce((a,v)=>a+costoVentaReal(v), 0);
+
+  // ── Utilidad Bruta ──
+  const utilBruta = ingresos - cogs;
+  const margenBruto = ingresos>0?(utilBruta/ingresos*100):0;
+
+  // ── Gastos Operativos por categoría ──
+  const opexPorCat = CATEGORIAS_GASTO.map(cat=>({
+    ...cat,
+    total: gastos.filter(g=>g.categoria===cat.id).reduce((a,g)=>a+g.monto,0)
+  })).filter(c=>c.total>0);
+  const totalOpex = opexPorCat.reduce((a,c)=>a+c.total, 0);
+
+  // ── Utilidad Neta ──
+  const utilNeta = utilBruta - totalOpex;
+  const margenNeto = ingresos>0?(utilNeta/ingresos*100):0;
+
+  // ── Flujo de Efectivo ──
+  // Entradas reales de caja en el período
+  let cobrado = 0;
+  ventas.filter(v=>v.condicion==='contado').forEach(v=>cobrado+=v.total);
+  DB.cuentas.forEach(ct=>{
+    if(ct.tipo!=='cxc') return;
+    const venta = DB.ventas.find(v=>v.id===ct.refId);
+    if(!venta||venta.cancelado) return;
+    ct.abonos.filter(a=>inPeriod(a.fecha,p)).forEach(a=>cobrado+=a.monto);
+  });
+  // Salidas reales de caja en el período (compras pagadas + gastos)
+  let pagadoCompras = 0;
+  compras.filter(x=>x.condicion==='contado').forEach(x=>pagadoCompras+=compraTotal(x));
+  DB.cuentas.forEach(ct=>{
+    if(ct.tipo!=='cxp') return;
+    const comp = DB.compras.find(x=>x.id===ct.refId);
+    if(!comp||comp.cancelado) return;
+    ct.abonos.filter(a=>inPeriod(a.fecha,p)).forEach(a=>pagadoCompras+=a.monto);
+  });
+  const pagadoGastos = gastos.reduce((a,g)=>a+g.monto,0);
+  const totalSalidas = pagadoCompras + pagadoGastos;
+  const flujoNeto = cobrado - totalSalidas;
+
+  // ── HTML ──
+  const periodos = [{k:'hoy',l:'Hoy'},{k:'semana',l:'Semana'},{k:'mes',l:'Mes'},{k:'todo',l:'Todo'}];
+  const fmtPct = n=>`<span style="font-weight:700;color:${n>=0?'var(--green)':'var(--red)'}">${n.toFixed(1)}%</span>`;
+  const fmtVal = (n,bold=false)=>`<span style="font-weight:${bold?700:500};color:${n>=0?'var(--green)':'var(--red)'}">${fmt(n)}</span>`;
+
+  c.innerHTML = `
+    <div class="seg-ctrl" id="finSeg" style="margin-bottom:20px">
+      ${periodos.map(x=>`<button data-fp="${x.k}" class="${finPeriodo===x.k?'active':''}">${x.l}</button>`).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:18px;margin-bottom:18px" id="finCols">
+
+      <!-- Estado de Resultados -->
+      <div class="card">
+        <div class="card-head"><h3>Estado de Resultados</h3><span class="badge gray">${finPeriodo}</span></div>
+        <div style="padding:0 20px 20px">
+
+          <div style="border-left:3px solid var(--green);padding:10px 14px;margin-bottom:4px;background:#f0fdf422;border-radius:0 6px 6px 0">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--green);margin-bottom:8px">INGRESOS</div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="color:var(--text-soft)">Ventas del período</span>
+              <span style="font-weight:600">${fmt(ingresos)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-weight:700;margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0">
+              <span>Total Ingresos</span><span style="color:var(--green)">${fmt(ingresos)}</span>
+            </div>
+          </div>
+
+          <div style="border-left:3px solid #8b5cf6;padding:10px 14px;margin:4px 0;background:#8b5cf608;border-radius:0 6px 6px 0">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#8b5cf6;margin-bottom:8px">COSTO DE VENTAS (COGS)</div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="color:var(--text-soft)">Costo real de mercancía vendida</span>
+              <span style="font-weight:600;color:var(--red)">${fmt(-cogs)}</span>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;font-weight:700;font-size:1.05rem;padding:12px 14px;background:#f8fafc;border-radius:8px;margin:8px 0">
+            <span>Utilidad Bruta</span><span style="color:${utilBruta>=0?'var(--green)':'var(--red)'}">${fmt(utilBruta)}</span>
+          </div>
+          <div style="text-align:right;font-size:12px;color:var(--text-soft);margin-bottom:12px">Margen Bruto: ${fmtPct(margenBruto)}</div>
+
+          <div style="border-left:3px solid #f59e0b;padding:10px 14px;margin:4px 0;background:#f59e0b08;border-radius:0 6px 6px 0">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#f59e0b;margin-bottom:8px">GASTOS OPERATIVOS</div>
+            ${opexPorCat.length ? opexPorCat.map(cat=>`
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                <span style="color:var(--text-soft);display:flex;align-items:center;gap:6px">
+                  <span style="width:7px;height:7px;border-radius:50%;background:${cat.color};display:inline-block"></span>${cat.label}
+                </span>
+                <span style="font-weight:600;color:var(--red)">${fmt(-cat.total)}</span>
+              </div>`).join('')
+            : `<div style="color:var(--text-soft);font-size:13px">Sin gastos en el período</div>`}
+            <div style="display:flex;justify-content:space-between;font-weight:700;margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0">
+              <span>Total Gastos Op.</span><span style="color:var(--red)">${fmt(-totalOpex)}</span>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;font-weight:700;font-size:1.15rem;padding:14px 14px;background:${utilNeta>=0?'#f0fdf4':'#fff5f5'};border-radius:8px;margin-top:10px;border:2px solid ${utilNeta>=0?'#16a34a33':'#dc262633'}">
+            <span>Utilidad Neta</span><span style="color:${utilNeta>=0?'var(--green)':'var(--red)'}">${fmt(utilNeta)}</span>
+          </div>
+          <div style="text-align:right;font-size:12px;color:var(--text-soft);margin-top:6px">Margen Neto: ${fmtPct(margenNeto)}</div>
+        </div>
+      </div>
+
+      <!-- Columna derecha: KPIs + Flujo -->
+      <div style="display:flex;flex-direction:column;gap:18px">
+        <!-- KPIs -->
+        <div class="card">
+          <div class="card-head"><h3>Indicadores clave</h3></div>
+          <div style="padding:0 20px 16px">
+            ${[
+              {l:'Margen Bruto',s:'Ingresos − COGS',v:margenBruto,pct:true},
+              {l:'Margen Neto',s:'Después de gastos operativos',v:margenNeto,pct:true},
+              {l:'Total Gastos Op.',s:'Suma del período',v:-totalOpex,pct:false},
+              {l:'Ratio Gastos/Ingreso',s:'Menor = más eficiente',v:ingresos>0?-(totalOpex/ingresos*100):null,pct:true},
+            ].map(k=>`
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:12px 0;border-bottom:1px solid #f0f4f8">
+                <div><div style="font-weight:600;font-size:13px">${k.l}</div><div style="font-size:11px;color:var(--text-soft)">${k.s}</div></div>
+                <div style="font-weight:700;font-size:14px;color:${k.v===null?'var(--red)':k.v>=0?'var(--green)':'var(--red)'}">
+                  ${k.v===null?'—':k.pct?Math.abs(k.v).toFixed(1)+'%':fmt(Math.abs(k.v))}
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>
+
+        <!-- Flujo de Efectivo -->
+        <div class="card">
+          <div class="card-head"><h3>Flujo de Efectivo</h3></div>
+          <div style="padding:0 20px 16px">
+            <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f4f8">
+              <span style="color:var(--text-soft)">(+) Cobrado a clientes</span>
+              <span style="color:var(--green);font-weight:600">+${fmt(cobrado)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f4f8">
+              <span style="color:var(--text-soft)">(−) Pagado a proveedores</span>
+              <span style="color:var(--red);font-weight:600">−${fmt(pagadoCompras)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f4f8">
+              <span style="color:var(--text-soft)">(−) Gastos operativos</span>
+              <span style="color:var(--red);font-weight:600">−${fmt(pagadoGastos)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:14px 0 4px;font-weight:700;font-size:1.05rem">
+              <span>Flujo neto del período</span>
+              <span style="color:${flujoNeto>=0?'var(--green)':'var(--red)'}">${flujoNeto>=0?'+':''}${fmt(flujoNeto)}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Desglose gastos por categoría -->
+        ${opexPorCat.length?`
+        <div class="card">
+          <div class="card-head"><h3>Desglose gastos</h3></div>
+          <div style="padding:0 20px 16px">
+            ${opexPorCat.map(cat=>{
+              const pct=totalOpex>0?(cat.total/totalOpex*100).toFixed(0):0;
+              return `<div style="margin-bottom:12px">
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                  <span style="font-size:12px;font-weight:600;color:${cat.color}">${cat.label}</span>
+                  <span style="font-size:12px;font-weight:700">${fmt(cat.total)}</span>
+                </div>
+                <div style="height:5px;background:#f0f4f8;border-radius:99px">
+                  <div style="height:5px;background:${cat.color};border-radius:99px;width:${pct}%"></div>
+                </div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`:''}
+      </div>
+    </div>`;
+
+  document.querySelectorAll('#finSeg button').forEach(b=>b.onclick=()=>{ finPeriodo=b.dataset.fp; renderFinanzas(c); icons(); });
+  if(window.innerWidth<900) document.getElementById('finCols').style.gridTemplateColumns='1fr';
+  icons();
+}
 /* =========================================================
    NAV — Event delegation (sobrevive re-renders de lucide)
    ========================================================= */
