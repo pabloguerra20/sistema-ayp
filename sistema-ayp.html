@@ -259,8 +259,9 @@ async function sbDelete(table, id){
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 function fmt(n){ return new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:2}).format(n||0); }
 function fmtInt(n){ return new Intl.NumberFormat('es-MX').format(n||0); }
-function todayISO(){ return new Date().toISOString().slice(0,10); }
-function daysAgoISO(d){ const t=new Date(); t.setDate(t.getDate()-d); return t.toISOString().slice(0,10); }
+function toISODate(dt){ return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`; }
+function todayISO(){ return toISODate(new Date()); }
+function daysAgoISO(d){ const t=new Date(); t.setDate(t.getDate()-d); return toISODate(t); }
 function fmtDate(iso){ if(!iso) return '—'; const [y,m,d]=iso.slice(0,10).split('-'); return `${d}/${m}/${y}`; }
 function icons(){
   if(!window.__lucideFailed && window.lucide) lucide.createIcons();
@@ -415,6 +416,11 @@ function costoVentaReal(v){ return v.lineas.reduce((a,l)=>a+l.cantidad*costoUnit
 function cuentaPagado(c){ return c.abonos.reduce((a,b)=>a+b.monto,0); }
 function cuentaSaldo(c){ return Math.max(0,c.montoTotal-cuentaPagado(c)); }
 function cuentaEstado(c){ const p=cuentaPagado(c); if(p>=c.montoTotal-0.001) return 'pagado'; if(p>0) return 'parcial'; return 'pendiente'; }
+function cuentaCancelada(ct){
+  // True si la venta/compra de origen está cancelada → no debe contar como saldo vivo
+  if(ct.tipo==='cxc'){ const v=DB.ventas.find(v=>v.id===ct.refId); return !!(v&&v.cancelado); }
+  const c=DB.compras.find(c=>c.id===ct.refId); return !!(c&&c.cancelado);
+}
 function getMovimientos(){
   const movs=[];
   ventasActivas().forEach(v=>{
@@ -526,8 +532,8 @@ function renderDashboard(c){
   },0);
   const totalEgresado=egresadoContado+egresadoAbonos;
   const flujoNeto=totalCobrado-totalEgresado;
-  const cxc=DB.cuentas.filter(c=>c.tipo==='cxc').reduce((a,c)=>a+cuentaSaldo(c),0);
-  const cxp=DB.cuentas.filter(c=>c.tipo==='cxp').reduce((a,c)=>a+cuentaSaldo(c),0);
+  const cxc=DB.cuentas.filter(c=>c.tipo==='cxc'&&!cuentaCancelada(c)).reduce((a,c)=>a+cuentaSaldo(c),0);
+  const cxp=DB.cuentas.filter(c=>c.tipo==='cxp'&&!cuentaCancelada(c)).reduce((a,c)=>a+cuentaSaldo(c),0);
   const valInv=valorInventario();
   const piezasStock=DB.productos.reduce((a,p)=>a+Math.max(0,getStock(p.id)),0);
   const volProd={};
@@ -804,6 +810,17 @@ function cancelarTrans(id,tipo){
   const r=tipo==='ventas'?DB.ventas.find(v=>v.id===id):DB.compras.find(c=>c.id===id);
   if(!r||r.cancelado) return;
   const isV=tipo==='ventas';
+  // Cancelar una compra retira sus piezas del stock: bloquear si ya se vendieron (dejaría inventario negativo)
+  if(!isV){
+    const resta={};
+    r.lineas.forEach(l=>resta[l.productoId]=(resta[l.productoId]||0)+l.cantidad);
+    for(const pid in resta){
+      if(getStock(pid)-resta[pid] < 0){
+        toast(`No se puede cancelar: dejaría stock negativo de ${prodName(pid)} (ya se vendió)`,'alert-triangle');
+        return;
+      }
+    }
+  }
   const cuenta=DB.cuentas.find(ct=>ct.refId===id);
   openModal('Cancelar '+(isV?'venta':'compra'),`
     <div style="background:var(--red-soft);border:1px solid #fca5a5;border-radius:8px;padding:11px 13px;margin-bottom:14px;font-size:12.5px;color:#991b1b">
@@ -1049,7 +1066,7 @@ function renderPagos(c){
   let cuentas=DB.cuentas.filter(c=>c.tipo===tipo);
   if(pagosFilter!=='todos') cuentas=cuentas.filter(c=>cuentaEstado(c)===pagosFilter);
   cuentas.sort((a,b)=>a.fechaOrigen<b.fechaOrigen?1:-1);
-  const totalPend=DB.cuentas.filter(c=>c.tipo===tipo).reduce((a,c)=>a+cuentaSaldo(c),0);
+  const totalPend=DB.cuentas.filter(c=>c.tipo===tipo&&!cuentaCancelada(c)).reduce((a,c)=>a+cuentaSaldo(c),0);
   c.innerHTML=`
     <div class="tabs">
       <button class="tab ${tipo==='cxc'?'active':''}" data-tab="cxc">Cuentas por Cobrar</button>
