@@ -203,7 +203,6 @@ textarea.input{resize:vertical;min-height:64px}
     </div>
     <nav id="nav"></nav>
     <div class="sidebar-foot">
-      <button class="nav-item" data-view="entidades"><i data-lucide="contact"></i><span>Clientes y Proveedores</span></button>
       <div style="display:flex;align-items:center;gap:8px;padding:10px 10px 0;font-size:11px;color:#6b6b6b">
         <span class="sync-dot" id="syncDot"></span>
         <span id="syncLabel">Conectado</span>
@@ -452,27 +451,45 @@ function inPeriod(iso,p){
 }
 
 /* ---------- Navegación ---------- */
-const VIEWS=[
-  {id:'dashboard',label:'Dashboard',icon:'layout-dashboard'},
-  {id:'productos',label:'Productos',icon:'package'},
-  {id:'historial',label:'Historial',icon:'clock'},
-  {id:'venta',label:'Registrar Venta',icon:'shopping-cart'},
-  {id:'compra',label:'Registrar Compra',icon:'truck'},
-  {id:'pagos',label:'Pagos (CxC / CxP)',icon:'wallet'},
-  {id:'movimientos',label:'Movimientos',icon:'arrow-left-right'},
-  {id:'gastos',label:'Gastos',icon:'receipt'},
-  {id:'finanzas',label:'Estados Financieros',icon:'bar-chart-2'},
+const NAV_GROUPS=[
+  {cat:'General', items:[
+    {id:'dashboard',label:'Dashboard',icon:'layout-dashboard'},
+    {id:'historial',label:'Historial',icon:'clock'},
+  ]},
+  {cat:'Ventas', items:[
+    {id:'venta',label:'Registrar Venta',icon:'shopping-cart'},
+    {id:'cobranza',label:'Cobranza (CxC)',icon:'hand-coins'},
+  ]},
+  {cat:'Compras', items:[
+    {id:'compra',label:'Registrar Compra',icon:'truck'},
+    {id:'pagos',label:'Pagos (CxP)',icon:'credit-card'},
+  ]},
+  {cat:'Finanzas', items:[
+    {id:'movimientos',label:'Movimientos',icon:'arrow-left-right'},
+    {id:'gastos',label:'Gastos',icon:'receipt'},
+    {id:'finanzas',label:'Estados Financieros',icon:'bar-chart-2'},
+  ]},
+  {cat:'Catálogo', items:[
+    {id:'productos',label:'Productos',icon:'package'},
+    {id:'entidades',label:'Clientes y Proveedores',icon:'contact'},
+  ]},
 ];
 let current='dashboard';
 function renderNav(){
-  document.getElementById('nav').innerHTML='<div class="nav-label">Operación</div>'+VIEWS.map(v=>
-    `<button class="nav-item ${current===v.id?'active':''}" data-view="${v.id}"><i data-lucide="${v.icon}"></i><span>${v.label}</span></button>`
+  document.getElementById('nav').innerHTML=NAV_GROUPS.map(g=>
+    `<div class="nav-label">${g.cat}</div>`+g.items.map(v=>
+      `<button class="nav-item ${current===v.id?'active':''}" data-view="${v.id}"><i data-lucide="${v.icon}"></i><span>${v.label}</span></button>`
+    ).join('')
   ).join('');
   // Solo clase activa — clicks van por event delegation en sidebar
   document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===current));
   icons();
 }
-function navigate(view){ current=view; renderNav(); render(); document.querySelector('.content').scrollTop=0; }
+function navigate(view){
+  if(view==='cobranza') pagosTab='cxc';
+  if(view==='pagos')    pagosTab='cxp';
+  current=view; renderNav(); render(); document.querySelector('.content').scrollTop=0;
+}
 function setTop(title,sub,actions){
   document.getElementById('topbar').innerHTML=`<div><h2>${title}</h2><p>${sub||''}</p></div><div style="display:flex;gap:10px">${actions||''}</div>`;
   icons();
@@ -488,7 +505,7 @@ function render(){
   else if(current==='historial') renderHistorial(c);
   else if(current==='venta') renderTransForm(c,'venta');
   else if(current==='compra') renderTransForm(c,'compra');
-  else if(current==='pagos') renderPagos(c);
+  else if(current==='pagos'||current==='cobranza') renderPagos(c);
   else if(current==='movimientos') renderMovimientos(c);
   else if(current==='entidades') renderEntidades(c);
   else if(current==='perfil-entidad') renderPerfilEntidad(c);
