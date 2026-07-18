@@ -491,6 +491,8 @@ function render(){
   else if(current==='pagos') renderPagos(c);
   else if(current==='movimientos') renderMovimientos(c);
   else if(current==='entidades') renderEntidades(c);
+  else if(current==='perfil-entidad') renderPerfilEntidad(c);
+  else if(current==='perfil-producto') renderPerfilProducto(c);
   else if(current==='gastos') renderGastos(c);
   else if(current==='finanzas') renderFinanzas(c);
   // Reinyectar el banner al inicio del contenido
@@ -671,13 +673,14 @@ function renderProductos(c){
     <tbody>${DB.productos.length?DB.productos.map(p=>{
       const st=getStock(p.id), cr=costoUnitReal(p.id);
       return `<tr style="${p.activo?'':'opacity:.5'}">
-        <td style="font-weight:600">${esc(p.nombre)}</td>
+        <td style="font-weight:600;cursor:pointer;color:var(--accent)" onclick="openCardProducto('${p.id}')" title="Ver historial y clientes">${esc(p.nombre)}</td>
         <td><span class="cat-pill cat-${p.categoria}">${p.categoria}</span></td>
         <td class="num"><span style="font-weight:600;${st<=0?'color:var(--red)':''}">${fmtInt(st)}</span> <span class="muted" style="font-size:12px">pz</span></td>
         <td class="num">${fmt(p.precioCostoRef)}</td>
         <td class="num" style="font-weight:600">${fmt(cr)}</td>
         <td>${p.activo?'<span class="badge green"><span class="dot"></span>Activo</span>':'<span class="badge gray">Inactivo</span>'}</td>
         <td><div class="row-actions">
+          <button class="btn-icon" onclick="openCardProducto('${p.id}')" title="Ver historial y clientes"><i data-lucide="line-chart"></i></button>
           <button class="btn-icon" onclick="openProd('${p.id}')"><i data-lucide="pencil"></i></button>
           <button class="btn-icon" onclick="toggleProd('${p.id}')"><i data-lucide="${p.activo?'eye-off':'eye'}"></i></button>
           <button class="btn-icon" onclick="deleteProd('${p.id}')" style="color:var(--red)"><i data-lucide="trash-2"></i></button>
@@ -1191,11 +1194,11 @@ function renderEntidades(c){
   c.innerHTML=`<div class="card"><div class="tbl-wrap"><table>
     <thead><tr><th>Nombre</th><th>Tipo</th><th>Teléfono</th><th>Notas</th><th></th></tr></thead>
     <tbody>${DB.entidades.length?DB.entidades.map(e=>`<tr>
-      <td style="font-weight:600">${esc(e.nombre)}</td>
+      <td style="font-weight:600;cursor:pointer;color:var(--accent)" onclick="openCardEntidad('${e.id}')" title="Ver historial y estado de cuenta">${esc(e.nombre)}</td>
       <td>${e.tipo==='cliente'?'<span class="badge indigo">Cliente</span>':e.tipo==='proveedor'?'<span class="badge amber">Proveedor</span>':'<span class="badge gray">Ambos</span>'}</td>
       <td class="muted">${esc(e.telefono)||'—'}</td>
       <td class="muted" style="max-width:280px">${esc(e.notas)||'—'}</td>
-      <td><div class="row-actions"><button class="btn-icon" onclick="openEntidad('${e.id}')"><i data-lucide="pencil"></i></button></div></td>
+      <td><div class="row-actions"><button class="btn-icon" onclick="openCardEntidad('${e.id}')" title="Ver historial y estado de cuenta"><i data-lucide="history"></i></button><button class="btn-icon" onclick="openEntidad('${e.id}')"><i data-lucide="pencil"></i></button></div></td>
     </tr>`).join(''):`<tr><td colspan="5"><div class="empty"><i data-lucide="contact"></i><p>Sin contactos</p></div></td></tr>`}
     </tbody></table></div></div>`;
   document.getElementById('newEntBtn').onclick=()=>openEntidad(); icons();
@@ -1231,12 +1234,229 @@ function openEntidad(id,presetTipo){
 }
 
 /* =========================================================
+   CARDS / PERFILES  (Cliente · Proveedor · Producto)
+   Todo derivado de DB — sin tablas nuevas
+   ========================================================= */
+let perfilEntId=null, perfilProdId=null;
+let perfilProdPeriod=6;   // meses del gráfico de tendencia
+let prodChart=null;
+
+/* ---- helpers ---- */
+function ventasDeEntidad(id){ return ventasActivas().filter(v=>v.entidadId===id).slice().sort((a,b)=>b.fecha.localeCompare(a.fecha)); }
+function comprasDeEntidad(id){ return comprasActivas().filter(c=>c.entidadId===id).slice().sort((a,b)=>b.fecha.localeCompare(a.fecha)); }
+function cuentasVivas(id,tipo){
+  return DB.cuentas.filter(ct=>ct.tipo===tipo && ct.entidadId===id && !cuentaCancelada(ct));
+}
+function lineasResumen(r){
+  const pz=r.lineas.reduce((a,l)=>a+(l.cantidad||0),0);
+  const nombres=r.lineas.map(l=>prodName(l.productoId)).filter(Boolean);
+  const primero=nombres[0]||'—';
+  const extra=nombres.length>1?` +${nombres.length-1}`:'';
+  return `<span title="${esc(nombres.join(', '))}">${esc(primero)}${extra} · ${fmtInt(pz)} pz</span>`;
+}
+function kpiBlock(items){
+  return `<div class="kpi-grid">${items.map(k=>`
+    <div class="kpi"><div class="lbl">${k.icon?`<i data-lucide="${k.icon}"></i>`:''}${k.lbl}</div>
+    <div class="val ${k.color||''}">${k.val}</div>${k.sub?`<div class="sub">${k.sub}</div>`:''}</div>`).join('')}</div>`;
+}
+function estadoCuentaHTML(cuentas,titulo,badgeCls){
+  if(!cuentas.length) return '';
+  const saldoTot=cuentas.reduce((a,ct)=>a+cuentaSaldo(ct),0);
+  return `<div class="card" style="margin-bottom:18px">
+    <div class="card-head"><h3>${titulo}</h3><span class="badge ${saldoTot>0.001?badgeCls:'green'}">Saldo ${fmt(saldoTot)}</span></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Fecha</th><th class="num">Monto</th><th class="num">Pagado</th><th class="num">Saldo</th><th>Estado</th></tr></thead>
+      <tbody>${cuentas.map(ct=>{
+        const est=cuentaEstado(ct), b=est==='pagado'?'green':est==='parcial'?'amber':'red';
+        return `<tr><td>${fmtDate(ct.fechaOrigen)}</td><td class="num">${fmt(ct.montoTotal)}</td><td class="num">${fmt(cuentaPagado(ct))}</td><td class="num" style="font-weight:600">${fmt(cuentaSaldo(ct))}</td><td><span class="badge ${b}">${est}</span></td></tr>`;
+      }).join('')}</tbody>
+    </table></div></div>`;
+}
+function historialTransHTML(regs,tipo){
+  const isV=tipo==='ventas';
+  if(!regs.length) return `<div class="card" style="margin-bottom:18px"><div class="card-head"><h3>Historial de ${isV?'ventas':'compras'}</h3></div><div class="empty" style="padding:28px"><i data-lucide="${isV?'shopping-cart':'truck'}"></i><p>Sin ${isV?'ventas':'compras'} registradas</p></div></div>`;
+  return `<div class="card" style="margin-bottom:18px">
+    <div class="card-head"><h3>Historial de ${isV?'ventas':'compras'}</h3><span class="badge gray">${regs.length} ${isV?'venta(s)':'compra(s)'}</span></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Fecha</th><th>Productos</th><th>Condición</th><th class="num">${isV?'Total':'Total (c/flete)'}</th></tr></thead>
+      <tbody>${regs.map(r=>{
+        const total=isV?r.total:compraTotal(r);
+        return `<tr style="cursor:pointer" onclick="verDetalle('${r.id}','${tipo}')"><td>${fmtDate(r.fecha)}</td><td>${lineasResumen(r)}</td><td><span class="badge ${r.condicion==='contado'?'green':'amber'}">${r.condicion}</span></td><td class="num" style="font-weight:600">${fmt(total)}</td></tr>`;
+      }).join('')}</tbody>
+    </table></div></div>`;
+}
+
+/* ---- CLIENTE / PROVEEDOR ---- */
+function entidadCardHTML(id,modal){
+  const e=ent(id); if(!e) return '<div class="empty"><p>Contacto no encontrado</p></div>';
+  const ventas=ventasDeEntidad(id), compras=comprasDeEntidad(id);
+  const cxc=cuentasVivas(id,'cxc'), cxp=cuentasVivas(id,'cxp');
+  const esCliente   = e.tipo==='cliente'   || e.tipo==='ambos' || ventas.length>0;
+  const esProveedor = e.tipo==='proveedor' || e.tipo==='ambos' || compras.length>0;
+
+  const totVend=ventas.reduce((a,v)=>a+v.total,0);
+  const totComp=compras.reduce((a,c)=>a+compraTotal(c),0);
+  const saldoCxC=cxc.reduce((a,ct)=>a+cuentaSaldo(ct),0);
+  const saldoCxP=cxp.reduce((a,ct)=>a+cuentaSaldo(ct),0);
+
+  let head=`<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+    <div style="font-size:12.5px;color:var(--text-soft)">
+      ${e.tipo==='cliente'?'<span class="badge indigo">Cliente</span>':e.tipo==='proveedor'?'<span class="badge amber">Proveedor</span>':'<span class="badge gray">Cliente y Proveedor</span>'}
+      ${e.telefono?`&nbsp;·&nbsp;<i data-lucide="phone" style="width:12px;height:12px;vertical-align:-1px"></i> ${esc(e.telefono)}`:''}
+      ${e.notas?`<div class="muted" style="margin-top:6px">${esc(e.notas)}</div>`:''}
+    </div>
+    ${modal?`<button class="btn btn-ghost btn-sm" id="verPerfilEnt"><i data-lucide="expand"></i>Ver perfil completo</button>`:''}
+  </div>`;
+
+  let ventaBlock='';
+  if(esCliente){
+    ventaBlock=kpiBlock([
+      {lbl:'Total vendido',icon:'trending-up',val:fmt(totVend),sub:`${ventas.length} venta(s)`},
+      {lbl:'Ticket promedio',icon:'receipt',val:fmt(ventas.length?totVend/ventas.length:0)},
+      {lbl:'Saldo por cobrar',icon:'wallet',val:fmt(saldoCxC),color:saldoCxC>0.001?'amber':'green'},
+      {lbl:'Última venta',icon:'calendar',val:ventas[0]?fmtDate(ventas[0].fecha):'—',sub:'&nbsp;'},
+    ])+estadoCuentaHTML(cxc,'Estado de cuenta · Por cobrar (CxC)','amber')+historialTransHTML(ventas,'ventas');
+  }
+  let compraBlock='';
+  if(esProveedor){
+    compraBlock=kpiBlock([
+      {lbl:'Total comprado',icon:'trending-down',val:fmt(totComp),sub:`${compras.length} compra(s)`},
+      {lbl:'Ticket promedio',icon:'receipt',val:fmt(compras.length?totComp/compras.length:0)},
+      {lbl:'Saldo por pagar',icon:'wallet',val:fmt(saldoCxP),color:saldoCxP>0.001?'red':'green'},
+      {lbl:'Última compra',icon:'calendar',val:compras[0]?fmtDate(compras[0].fecha):'—',sub:'&nbsp;'},
+    ])+estadoCuentaHTML(cxp,'Estado de cuenta · Por pagar (CxP)','red')+historialTransHTML(compras,'compras');
+  }
+  const sep=(esCliente&&esProveedor)?'<div style="height:2px;background:var(--border);margin:22px 0"></div>':'';
+  return head+ventaBlock+sep+compraBlock;
+}
+function mountEntidadCard(id,el,modal){
+  el.innerHTML=entidadCardHTML(id,modal); icons();
+  const vp=el.querySelector('#verPerfilEnt');
+  if(vp) vp.onclick=()=>{ closeModal(); abrirPerfilEntidad(id); };
+}
+function openCardEntidad(id){
+  const e=ent(id);
+  openModal(e?esc(e.nombre):'Contacto','<div id="cardEntBody"></div>',null,null,{wide:true});
+  mountEntidadCard(id,document.getElementById('cardEntBody'),true);
+}
+function abrirPerfilEntidad(id){ perfilEntId=id; current='perfil-entidad'; renderNav(); render(); document.querySelector('.content').scrollTop=0; }
+function renderPerfilEntidad(c){
+  const e=ent(perfilEntId);
+  setTop(e?esc(e.nombre):'Contacto','Perfil de cliente / proveedor',`<button class="btn btn-ghost" onclick="navigate('entidades')"><i data-lucide="arrow-left"></i>Volver</button>`);
+  c.innerHTML='<div id="perfilEntBody"></div>';
+  mountEntidadCard(perfilEntId,document.getElementById('perfilEntBody'),false);
+}
+
+/* ---- PRODUCTO ---- */
+function topCompradoresHTML(id){
+  const map={};
+  ventasActivas().forEach(v=>v.lineas.filter(l=>l.productoId===id).forEach(l=>{
+    if(!map[v.entidadId]) map[v.entidadId]={u:0,ing:0};
+    map[v.entidadId].u+=l.cantidad; map[v.entidadId].ing+=l.subtotal;
+  }));
+  const arr=Object.entries(map).map(([eid,d])=>({eid,...d})).sort((a,b)=>b.ing-a.ing);
+  if(!arr.length) return '<div class="empty" style="padding:24px 20px"><p>Aún no se ha vendido</p></div>';
+  const max=arr[0].ing||1;
+  return arr.slice(0,8).map((it,i)=>`<div class="rank-item">
+    <div class="rank-header"><span class="name">${i+1}. ${esc(entName(it.eid))}</span><span class="val">${fmtInt(it.u)} pz · <strong>${fmt(it.ing)}</strong></span></div>
+    <div class="rank-bar-track"><div class="rank-bar-fill indigo" style="width:${it.ing/max*100}%"></div></div>
+  </div>`).join('');
+}
+function drawProductoChart(id){
+  if(prodChart){ prodChart.destroy(); prodChart=null; }
+  const cv=document.getElementById('prodChartCanvas'); if(!cv) return;
+  if(window.__chartFailed||!window.Chart){ cv.parentElement.innerHTML='<div class="empty"><p>Gráfica no disponible</p></div>'; return; }
+  const N=perfilProdPeriod, now=new Date(), meses=[];
+  for(let i=N-1;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); meses.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); }
+  const bk={}; meses.forEach(m=>bk[m]={u:0,ing:0});
+  ventasActivas().forEach(v=>{ const m=v.fecha.slice(0,7); if(!(m in bk)) return; v.lineas.filter(l=>l.productoId===id).forEach(l=>{ bk[m].u+=l.cantidad; bk[m].ing+=l.subtotal; }); });
+  const labels=meses.map(m=>{ const [y,mo]=m.split('-'); return mo+'/'+y.slice(2); });
+  prodChart=new Chart(cv,{
+    data:{ labels, datasets:[
+      {type:'bar',label:'Unidades',data:meses.map(m=>bk[m].u),backgroundColor:'#6366f1',borderRadius:5,maxBarThickness:34,yAxisID:'y',order:2},
+      {type:'line',label:'Ingreso',data:meses.map(m=>bk[m].ing),borderColor:'#16a34a',backgroundColor:'#16a34a22',borderWidth:2.5,pointRadius:3,pointBackgroundColor:'#16a34a',tension:.3,yAxisID:'y1',order:1},
+    ]},
+    options:{ responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{ legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,font:{family:'Inter',size:12}}},
+        tooltip:{callbacks:{label:c=>c.dataset.label==='Ingreso'?'Ingreso: '+fmt(c.raw):'Unidades: '+fmtInt(c.raw)}}},
+      scales:{ x:{grid:{display:false},ticks:{font:{family:'Inter',size:11}}},
+        y:{beginAtZero:true,position:'left',ticks:{font:{size:11},precision:0},grid:{color:'#f0f0f0'}},
+        y1:{beginAtZero:true,position:'right',ticks:{font:{size:11},callback:v=>v>=1000?'$'+(v/1000).toFixed(0)+'k':'$'+v},grid:{display:false}} }
+    }
+  });
+}
+function productoCardHTML(id,modal){
+  const p=prod(id); if(!p) return '<div class="empty"><p>Producto no encontrado</p></div>';
+  const lv=[]; ventasActivas().forEach(v=>v.lineas.filter(l=>l.productoId===id).forEach(l=>lv.push({...l,fecha:v.fecha,entidadId:v.entidadId,ventaId:v.id})));
+  const unidades=lv.reduce((a,l)=>a+l.cantidad,0);
+  const ingreso=lv.reduce((a,l)=>a+l.subtotal,0);
+  const costoR=costoUnitReal(id);
+  const margen=ingreso-unidades*costoR, margenPct=ingreso>0?margen/ingreso*100:0;
+  const nClientes=new Set(lv.map(l=>l.entidadId)).size;
+  const stock=getStock(id), valorInv=Math.max(0,stock)*costoR;
+  const detalle=lv.slice().sort((a,b)=>b.fecha.localeCompare(a.fecha));
+
+  const head=`<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+    <span class="cat-pill cat-${p.categoria}">${p.categoria}</span>
+    ${modal?`<button class="btn btn-ghost btn-sm" id="verPerfilProd"><i data-lucide="expand"></i>Ver perfil completo</button>`:''}
+  </div>`;
+
+  const kpis=kpiBlock([
+    {lbl:'Unidades vendidas',icon:'boxes',val:fmtInt(unidades),sub:`${nClientes} cliente(s)`},
+    {lbl:'Ingreso generado',icon:'trending-up',val:fmt(ingreso)},
+    {lbl:'Margen estimado',icon:'percent',val:fmt(margen),color:margen>=0?'green':'red',sub:`${margenPct.toFixed(1)}% · costo real ${fmt(costoR)}`},
+    {lbl:'Stock actual',icon:'package',val:`${fmtInt(stock)} pz`,color:stock<=0?'red':'',sub:`Valor inv. ${fmt(valorInv)}`},
+  ]);
+
+  const seg=`<div class="seg" id="prodPeriodSeg">${[[3,'3 meses'],[6,'6 meses'],[12,'12 meses']].map(o=>`<button data-pp="${o[0]}" class="${perfilProdPeriod===o[0]?'active':''}">${o[1]}</button>`).join('')}</div>`;
+  const chartCard=`<div class="card" style="margin-bottom:18px">
+    <div class="card-head"><h3>Tendencia de ventas</h3>${seg}</div>
+    <div class="card-pad"><div style="height:240px"><canvas id="prodChartCanvas"></canvas></div></div></div>`;
+
+  const rankCard=`<div class="card" style="margin-bottom:18px">
+    <div class="card-head"><h3>Top compradores</h3><span class="badge indigo">por ingreso</span></div>
+    <div class="card-pad">${topCompradoresHTML(id)}</div></div>`;
+
+  const detCard=`<div class="card" style="margin-bottom:18px">
+    <div class="card-head"><h3>Detalle de ventas</h3><span class="badge gray">${detalle.length} línea(s)</span></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Fecha</th><th>Cliente</th><th class="num">Cant.</th><th class="num">P.Unit</th><th class="num">Subtotal</th></tr></thead>
+      <tbody>${detalle.length?detalle.map(l=>`<tr style="cursor:pointer" onclick="verDetalle('${l.ventaId}','ventas')"><td>${fmtDate(l.fecha)}</td><td>${esc(entName(l.entidadId))}</td><td class="num">${fmtInt(l.cantidad)}</td><td class="num">${fmt(l.precioUnit)}</td><td class="num" style="font-weight:600">${fmt(l.subtotal)}</td></tr>`).join(''):`<tr><td colspan="5"><div class="empty" style="padding:24px"><p>Sin ventas registradas</p></div></td></tr>`}</tbody>
+    </table></div></div>`;
+
+  return head+kpis+chartCard+rankCard+detCard;
+}
+function mountProductoCard(id,el,modal){
+  el.innerHTML=productoCardHTML(id,modal); icons();
+  drawProductoChart(id);
+  el.querySelectorAll('#prodPeriodSeg [data-pp]').forEach(b=>{
+    b.onclick=()=>{ perfilProdPeriod=+b.dataset.pp; mountProductoCard(id,el,modal); };
+  });
+  const vp=el.querySelector('#verPerfilProd');
+  if(vp) vp.onclick=()=>{ closeModal(); abrirPerfilProducto(id); };
+}
+function openCardProducto(id){
+  const p=prod(id);
+  openModal(p?esc(p.nombre):'Producto','<div id="cardProdBody"></div>',null,null,{wide:true});
+  mountProductoCard(id,document.getElementById('cardProdBody'),true);
+}
+function abrirPerfilProducto(id){ perfilProdId=id; current='perfil-producto'; renderNav(); render(); document.querySelector('.content').scrollTop=0; }
+function renderPerfilProducto(c){
+  const p=prod(perfilProdId);
+  setTop(p?esc(p.nombre):'Producto','Perfil de producto',`<button class="btn btn-ghost" onclick="navigate('productos')"><i data-lucide="arrow-left"></i>Volver</button>`);
+  c.innerHTML='<div id="perfilProdBody"></div>';
+  mountProductoCard(perfilProdId,document.getElementById('perfilProdBody'),false);
+}
+
+/* =========================================================
    MODAL & TOAST
    ========================================================= */
 let modalConfirm=null;
-function openModal(title,bodyHTML,onConfirm,confirmLabel){
+function openModal(title,bodyHTML,onConfirm,confirmLabel,opts){
   modalConfirm=onConfirm;
-  document.getElementById('modal').innerHTML=`
+  const _modalEl=document.getElementById('modal');
+  _modalEl.style.maxWidth=(opts&&opts.wide)?'880px':'';
+  _modalEl.innerHTML=`
     <div class="modal-head"><h3>${title}</h3><button class="btn-icon" id="mClose"><i data-lucide="x"></i></button></div>
     <div class="modal-body">${bodyHTML}</div>
     ${onConfirm!==null?`<div class="modal-foot"><button class="btn btn-ghost" id="mCancel">Cancelar</button><button class="btn btn-primary" id="mOk"><i data-lucide="check"></i>${confirmLabel||'Guardar'}</button></div>`:''}`;
