@@ -423,6 +423,12 @@ async function loadAll(){
 /* ---------- Retiros de utilidades (carga tolerante a fallo) ----------
    Se carga por separado: si la tabla ayp_retiros aun no existe,
    la app sigue funcionando y el modulo Reparto se muestra vacio.     */
+function withTimeout(promise, ms, label){
+  return Promise.race([
+    promise,
+    new Promise((_,rej)=>setTimeout(()=>rej(new Error((label||'Operación')+': tiempo de espera agotado ('+(ms/1000)+'s)')), ms))
+  ]);
+}
 async function loadRetiros(){
   DB.retiros = [];
   window.__retirosTablaFalta = false;
@@ -2169,8 +2175,7 @@ async function arrancarApp(){
   ls.classList.remove('hidden'); ls.style.display='flex';
   document.getElementById('loginScreen').style.display='none';
   try{
-    await loadAll();
-    await loadRetiros();
+    await withTimeout(loadAll(), 20000, 'Carga inicial');
     await seedIfEmpty();
     ls.classList.add('hidden');
     document.getElementById('appShell').style.display='flex';
@@ -2179,9 +2184,13 @@ async function arrancarApp(){
     initRealtime();
     initVisibilityReload();
     setSyncStatus('ok');
+    // Retiros en segundo plano: NUNCA bloquea ni rompe el arranque de la app
+    loadRetiros().then(()=>{ if(current==='finanzas') render(); }).catch(()=>{ window.__retirosTablaFalta=true; });
   }catch(err){
     document.getElementById('loadingMsg').textContent='Error al conectar con Supabase: '+err.message;
     const sp=document.querySelector('.loading-screen .spinner'); if(sp) sp.style.display='none';
+    const btn=document.createElement('button'); btn.textContent='Reintentar'; btn.style.cssText='margin-top:14px;padding:9px 18px;border-radius:8px;border:1px solid #d4d4d8;background:#fff;font-weight:600;cursor:pointer';
+    btn.onclick=()=>location.reload(); const ms=document.getElementById('loadingMsg'); if(ms&&ms.parentElement) ms.parentElement.appendChild(btn);
   }
 }
 
