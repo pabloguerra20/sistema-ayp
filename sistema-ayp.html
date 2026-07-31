@@ -184,6 +184,59 @@ textarea.input{resize:vertical;min-height:64px}
   .content,.topbar{padding-left:18px;padding-right:18px}
   #dashRent .tbl-wrap{font-size:12px}
 }
+
+/* ---------- Login / seleccion de perfil ---------- */
+.login-screen{position:fixed;inset:0;background:linear-gradient(160deg,#111114,#1c1c22 60%,#111114);display:flex;align-items:center;justify-content:center;z-index:210;padding:24px;}
+.login-box{width:100%;max-width:380px;background:var(--surface);border-radius:20px;box-shadow:0 24px 70px rgba(0,0,0,.5);padding:34px 30px 30px;animation:pop .22s ease}
+.login-head{text-align:center;margin-bottom:24px;position:relative}
+.login-logo{width:52px;height:52px;border-radius:15px;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;margin:0 auto 14px}
+.login-logo i{width:27px;height:27px}
+.login-head h1{font-size:20px;font-weight:800;letter-spacing:-.4px;margin-bottom:2px}
+.login-head p{font-size:13px;color:var(--text-soft)}
+.login-back{position:absolute;left:0;top:0;width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--text-soft)}
+.login-back:hover{background:var(--surface-2)}
+.login-back i{width:17px;height:17px}
+.login-profiles{display:flex;flex-direction:column;gap:12px}
+.login-profile{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:15px 16px;border:1px solid var(--border);border-radius:14px;background:var(--surface);transition:.14s}
+.login-profile:hover{border-color:var(--accent);background:var(--accent-soft);transform:translateY(-1px)}
+.lp-ic{width:44px;height:44px;border-radius:12px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0}
+.lp-ic i{width:22px;height:22px}
+.lp-ic.big{width:56px;height:56px;margin:0 auto 12px;background:var(--accent-soft)}
+.lp-ic.big i{width:28px;height:28px}
+.login-profile .lp-name{font-size:15px;font-weight:700;display:block}
+.login-profile .lp-role{font-size:12px;color:var(--text-soft);display:block}
+.login-profile > span:not(.lp-ic){display:flex;flex-direction:column}
+.pin-dots{display:flex;justify-content:center;gap:14px;margin:6px 0 4px}
+.pin-dots.shake{animation:shake .38s}
+.pin-dot{width:13px;height:13px;border-radius:50%;border:2px solid var(--border);transition:.12s}
+.pin-dot.on{background:var(--accent);border-color:var(--accent)}
+.pin-err{text-align:center;color:var(--red);font-size:12.5px;font-weight:600;height:18px;margin-bottom:6px}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:250px;margin:6px auto 0}
+.pin-key{height:58px;border-radius:14px;border:1px solid var(--border);background:var(--surface);font-size:21px;font-weight:600;color:var(--text);transition:.1s;display:flex;align-items:center;justify-content:center}
+.pin-key:hover{background:var(--surface-2)}
+.pin-key:active{transform:scale(.95);background:var(--accent-soft)}
+.pin-key.pin-del i{width:22px;height:22px}
+@keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-7px)}40%,60%{transform:translateX(7px)}}
+
+/* ---------- Chip de usuario en sidebar ---------- */
+.user-chip{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;background:#ffffff0d;margin-bottom:8px}
+.uc-ic{width:32px;height:32px;border-radius:9px;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+.uc-ic i{width:17px;height:17px}
+.uc-info{display:flex;flex-direction:column;min-width:0;flex:1}
+.uc-name{font-size:12.5px;font-weight:700;color:#fff;line-height:1.2}
+.uc-role{font-size:10.5px;color:#8a8a8a;font-weight:500}
+.uc-out{width:30px;height:30px;border-radius:8px;border:none;background:transparent;color:#8a8a8a;display:flex;align-items:center;justify-content:center;transition:.13s;flex-shrink:0}
+.uc-out:hover{background:#ffffff14;color:#ef4444}
+.uc-out i{width:16px;height:16px}
+
+/* ---------- Reparto de utilidades ---------- */
+.reparto-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px}
+.reparto-stat{background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:11px 12px}
+.reparto-stat .rs-lbl{font-size:10.5px;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:.03em;margin-bottom:5px}
+.reparto-stat .rs-val{font-size:16px;font-weight:800;letter-spacing:-.3px}
+.reparto-warn{background:var(--amber-soft);color:#92400e;border-radius:9px;padding:10px 12px;font-size:12px;font-weight:500;margin-bottom:12px;display:flex;gap:8px;align-items:flex-start}
+.reparto-warn i{width:15px;height:15px;flex-shrink:0;margin-top:1px}
+@media(max-width:520px){ .reparto-stats{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
@@ -195,6 +248,11 @@ textarea.input{resize:vertical;min-height:64px}
   <p id="loadingMsg">Conectando con Supabase…</p>
 </div>
 
+<!-- Login / seleccion de perfil -->
+<div class="login-screen" id="loginScreen" style="display:none">
+  <div class="login-box" id="loginBox"></div>
+</div>
+
 <div class="app" id="appShell" style="display:none">
   <aside class="sidebar">
     <div class="brand">
@@ -203,6 +261,7 @@ textarea.input{resize:vertical;min-height:64px}
     </div>
     <nav id="nav"></nav>
     <div class="sidebar-foot">
+      <div id="userChip"></div>
       <div style="display:flex;align-items:center;gap:8px;padding:10px 10px 0;font-size:11px;color:#6b6b6b">
         <span class="sync-dot" id="syncDot"></span>
         <span id="syncLabel">Conectado</span>
@@ -254,6 +313,41 @@ async function sbDelete(table, id){
   if(error) throw new Error(error.message);
 }
 
+/* ============================================================
+   SESION, USUARIOS Y PERMISOS  (control de acceso en la interfaz)
+   ------------------------------------------------------------
+   CAMBIA LOS PIN de abajo por los tuyos antes de publicar.
+   Nota: este control oculta informacion en la UI. No es un candado
+   criptografico. Para uso interno entre Pablo y Adrian basta.
+   ============================================================ */
+const USUARIOS = [
+  { id:'pablo',  nombre:'Pablo',  rol:'dueno',    label:'Dueño',     icon:'crown',      pin:'2580' },
+  { id:'adrian', nombre:'Adrián', rol:'empleado', label:'Operación', icon:'user-round', pin:'1379' },
+];
+// true = ese rol PUEDE ver la informacion
+const PERMISOS = {
+  dueno:    { repartoUtil:true,  flujoNeto:true,  saldoAcum:true  },
+  empleado: { repartoUtil:false, flujoNeto:false, saldoAcum:false },
+};
+let SESION = null; // {id, nombre, rol, label}
+function can(p){ return !!(SESION && PERMISOS[SESION.rol] && PERMISOS[SESION.rol][p]); }
+function esDueno(){ return !!(SESION && SESION.rol==='dueno'); }
+function guardarSesion(u){
+  SESION = { id:u.id, nombre:u.nombre, rol:u.rol, label:u.label };
+  try{ localStorage.setItem('ayp_sesion', JSON.stringify(SESION)); }catch(e){}
+}
+function cerrarSesion(){
+  try{ localStorage.removeItem('ayp_sesion'); }catch(e){}
+  SESION=null; location.reload();
+}
+function sesionGuardada(){
+  try{
+    const s=JSON.parse(localStorage.getItem('ayp_sesion')||'null');
+    if(s && USUARIOS.some(u=>u.id===s.id && u.rol===s.rol)) return s;
+  }catch(e){}
+  return null;
+}
+
 /* ---------- Utilidades ---------- */
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 function fmt(n){ return new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:2}).format(n||0); }
@@ -277,7 +371,7 @@ function setSyncStatus(s){ // 'ok'|'syncing'|'error'
 }
 
 /* ---------- Estado en memoria ---------- */
-let DB = { productos:[], entidades:[], ventas:[], compras:[], cuentas:[], abonos:[], gastos:[] };
+let DB = { productos:[], entidades:[], ventas:[], compras:[], cuentas:[], abonos:[], gastos:[], retiros:[] };
 
 /* ---------- Carga inicial (paralela) ---------- */
 async function loadAll(){
@@ -324,6 +418,20 @@ async function loadAll(){
   DB.gastos = gastos.map(g=>({
     id:g.id, fecha:g.fecha, categoria:g.categoria, descripcion:g.descripcion, monto:+g.monto
   }));
+}
+
+/* ---------- Retiros de utilidades (carga tolerante a fallo) ----------
+   Se carga por separado: si la tabla ayp_retiros aun no existe,
+   la app sigue funcionando y el modulo Reparto se muestra vacio.     */
+async function loadRetiros(){
+  DB.retiros = [];
+  window.__retirosTablaFalta = false;
+  try{
+    const rows = await sbGet('ayp_retiros', {order:'fecha', asc:false});
+    DB.retiros = rows.map(r=>({ id:r.id, fecha:r.fecha, monto:+r.monto, nota:r.nota, socio:r.socio||'Pablo' }));
+  }catch(e){
+    window.__retirosTablaFalta = true;
+  }
 }
 
 /* ---------- Realtime (SDK oficial) — canal único con debounce ---------- */
@@ -571,7 +679,7 @@ function renderDashboard(c){
       <div class="kpi"><div class="lbl"><i data-lucide="circle-dollar-sign"></i>Entradas</div><div class="val green">${fmt(totalCobrado)}</div><div class="sub">Contado + abonos recibidos</div></div>
       <div class="kpi"><div class="lbl"><i data-lucide="badge-dollar-sign"></i>Utilidad bruta</div><div class="val ${utilidad>=0?'green':'red'}">${fmt(utilidad)}</div><div class="sub">Margen ${margen.toFixed(1)}% · sobre facturado</div></div>
       <div class="kpi"><div class="lbl"><i data-lucide="arrow-down-circle"></i>Salidas</div><div class="val red">${fmt(totalEgresado)}</div><div class="sub">Contado + abonos pagados</div></div>
-      <div class="kpi"><div class="lbl"><i data-lucide="wallet"></i>Flujo neto de caja</div><div class="val ${flujoNeto>=0?'green':'red'}">${fmt(flujoNeto)}</div><div class="sub">Entradas − Salidas en período</div></div>
+      ${can('flujoNeto')?`<div class="kpi"><div class="lbl"><i data-lucide="wallet"></i>Flujo neto de caja</div><div class="val ${flujoNeto>=0?'green':'red'}">${fmt(flujoNeto)}</div><div class="sub">Entradas − Salidas en período</div></div>`:''}
       <div class="kpi"><div class="lbl"><i data-lucide="boxes"></i>Valor de inventario</div><div class="val">${fmt(valInv)}</div><div class="sub">${fmtInt(piezasStock)} pz · landed cost prom.</div></div>
       <div class="kpi"><div class="lbl"><i data-lucide="hand-coins"></i>CxC pendiente</div><div class="val amber">${fmt(cxc)}</div><div class="sub">Por cobrar (total acumulado)</div></div>
       <div class="kpi"><div class="lbl"><i data-lucide="receipt"></i>CxP pendiente</div><div class="val red">${fmt(cxp)}</div><div class="sub">Por pagar (total acumulado)</div></div>
@@ -1174,18 +1282,19 @@ function renderMovimientos(c){
       <div style="margin-left:auto;display:flex;gap:16px;font-size:13px">
         <span style="color:var(--green)">Entradas: <strong>${fmt(ent_)}</strong></span>
         <span style="color:var(--red)">Salidas: <strong>${fmt(sal_)}</strong></span>
-        <span>Neto: <strong>${fmt(ent_-sal_)}</strong></span>
+        ${can('flujoNeto')?`<span>Neto: <strong>${fmt(ent_-sal_)}</strong></span>`:''}
       </div>
     </div>
     <div class="card"><div class="tbl-wrap"><table>
-      <thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th class="num">Monto</th><th class="num">Saldo acum.</th></tr></thead>
+      <thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th class="num">Monto</th>${can('saldoAcum')?'<th class="num">Saldo acum.</th>':''}<th></th></tr></thead>
       <tbody>${movs.length?movs.slice().reverse().map(m=>`<tr>
         <td class="muted">${fmtDate(m.fecha)}</td>
         <td><span class="badge ${m.signo>0?'green':'red'}">${m.tipo.charAt(0).toUpperCase()+m.tipo.slice(1)}</span></td>
         <td>${esc(m.desc)}</td>
         <td class="num" style="font-weight:600;color:${m.signo>0?'var(--green)':'var(--red)'}">${m.signo>0?'+':'−'}${fmt(m.monto)}</td>
-        <td class="num muted">${fmt(m.saldoAcc)}</td>
-      </tr>`).join(''):`<tr><td colspan="5"><div class="empty"><i data-lucide="arrow-left-right"></i><p>Sin movimientos</p></div></td></tr>`}
+        ${can('saldoAcum')?`<td class="num muted">${fmt(m.saldoAcc)}</td>`:''}
+        <td><div class="row-actions"><button class="btn-icon" onclick="verMovimiento('${m.key}')" title="Ver detalle del movimiento"><i data-lucide="eye"></i></button></div></td>
+      </tr>`).join(''):`<tr><td colspan="${can('saldoAcum')?6:5}"><div class="empty"><i data-lucide="arrow-left-right"></i><p>Sin movimientos</p></div></td></tr>`}
       </tbody></table></div></div>`;
   document.getElementById('m_tipo').value=movTipo;
   document.getElementById('m_tipo').onchange=e=>{ movTipo=e.target.value; renderMovimientos(c); icons(); };
@@ -1193,14 +1302,57 @@ function renderMovimientos(c){
   document.getElementById('m_hasta').onchange=e=>{ movHasta=e.target.value; renderMovimientos(c); icons(); };
   document.getElementById('m_clear').onclick=()=>{ movTipo='todos'; movDesde=''; movHasta=''; renderMovimientos(c); icons(); };
   document.getElementById('expCsv').onclick=()=>{
-    const rows=[['Fecha','Tipo','Descripcion','Monto','Direccion','Saldo acumulado']];
-    movs.forEach(m=>rows.push([m.fecha,m.tipo,m.desc.replace(/"/g,"'"),m.monto.toFixed(2),m.signo>0?'Entrada':'Salida',m.saldoAcc.toFixed(2)]));
+    const incSaldo=can('saldoAcum');
+    const rows=[['Fecha','Tipo','Descripcion','Monto','Direccion'].concat(incSaldo?['Saldo acumulado']:[])];
+    movs.forEach(m=>rows.push([m.fecha,m.tipo,m.desc.replace(/"/g,"'"),m.monto.toFixed(2),m.signo>0?'Entrada':'Salida'].concat(incSaldo?[m.saldoAcc.toFixed(2)]:[])));
     const csv=rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
     const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8;'}));
     a.download=`movimientos_AyP_${todayISO()}.csv`; document.body.appendChild(a); a.click(); a.remove();
     toast('CSV exportado','download');
   };
   icons();
+}
+
+/* ---- Detalle de un movimiento (ojo en la bitacora) ---- */
+function verMovimiento(key){
+  const dash=key.indexOf('-');
+  const t=key.slice(0,dash), id=key.slice(dash+1);
+  if(t==='v') return verDetalle(id,'ventas');
+  if(t==='c') return verDetalle(id,'compras');
+  if(t==='ab'){
+    let cuenta=null, abono=null;
+    for(const ct of DB.cuentas){ const a=ct.abonos.find(x=>x.id===id); if(a){ cuenta=ct; abono=a; break; } }
+    if(!abono){ toast('Movimiento no encontrado','alert-triangle'); return; }
+    const esCobro = cuenta.tipo==='cxc';
+    const ref = esCobro ? DB.ventas.find(v=>v.id===cuenta.refId) : DB.compras.find(c=>c.id===cuenta.refId);
+    const refTotal = ref ? (esCobro ? ref.total : compraTotal(ref)) : cuenta.montoTotal;
+    const pagadoTot = cuentaPagado(cuenta), saldo = cuentaSaldo(cuenta);
+    const color = esCobro ? 'var(--green)' : 'var(--red)';
+    const row=(l,r,extra='')=>`<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span class="muted">${l}</span><span style="${extra}">${r}</span></div>`;
+    openModal(`Detalle · ${esCobro?'Abono cobrado':'Abono pagado'}`,`
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;color:var(--text-soft);margin-bottom:14px">
+        <span><strong>${esc(entName(cuenta.entidadId))}</strong></span>
+        <span>${fmtDate(abono.fecha)} · ${esCobro?'CxC':'CxP'}</span>
+      </div>
+      <div style="padding:12px 14px;background:${esCobro?'#f0fdf4':'#fff5f5'};border-radius:10px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:600">${esCobro?'Monto cobrado':'Monto pagado'}</span>
+        <span style="font-size:18px;font-weight:800;color:${color}">${esCobro?'+':'−'}${fmt(abono.monto)}</span>
+      </div>
+      ${abono.nota?`<div style="font-size:12.5px;color:var(--text-soft);margin-bottom:14px"><i data-lucide="sticky-note" style="width:13px;height:13px;vertical-align:-2px"></i> ${esc(abono.nota)}</div>`:''}
+      <div style="padding-top:12px;border-top:1px solid var(--border);font-size:13px">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--text-soft);margin-bottom:8px">CUENTA ORIGEN · ${esc(ref?(esCobro?'VENTA':'COMPRA'):'—')} ${ref?fmtDate(ref.fecha):''}</div>
+        ${row('Monto total de la cuenta', fmt(refTotal))}
+        ${row('Pagado acumulado', fmt(pagadoTot))}
+        ${row('Saldo restante', fmt(saldo), 'font-weight:700;color:'+(saldo>0.001?'var(--amber)':'var(--green)'))}
+      </div>
+      ${ref&&!ref.cancelado?`<button class="btn btn-ghost" id="verOp" style="width:100%;margin-top:14px;justify-content:center"><i data-lucide="external-link"></i>Ver ${esCobro?'venta':'compra'} completa</button>`:''}
+    `,null,null);
+    setTimeout(()=>{
+      const f=document.querySelector('.modal-foot'); if(f) f.style.display='none';
+      const vo=document.getElementById('verOp'); if(vo) vo.onclick=()=>verDetalle(ref.id, esCobro?'ventas':'compras');
+      icons();
+    },10);
+  }
 }
 
 /* =========================================================
@@ -1254,7 +1406,20 @@ function openEntidad(id,presetTipo){
    CARDS / PERFILES  (Cliente · Proveedor · Producto)
    Todo derivado de DB — sin tablas nuevas
    ========================================================= */
-let perfilEntId=null, perfilProdId=null;
+let perfilEntId=null, perfilProdId=null, perfilPeriodo='todo';
+const MESES_ES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+function matchPerfilPeriodo(iso,p){
+  if(!p||p==='todo') return true;
+  if(p==='mes-actual'){ const n=new Date(); const [y,m]=iso.slice(0,7).split('-'); return +y===n.getFullYear() && (+m-1)===n.getMonth(); }
+  return iso.slice(0,7)===p; // formato YYYY-MM
+}
+function mesesDeEntidad(id){
+  const set=new Set();
+  ventasActivas().filter(v=>v.entidadId===id).forEach(v=>set.add(v.fecha.slice(0,7)));
+  comprasActivas().filter(c=>c.entidadId===id).forEach(c=>set.add(c.fecha.slice(0,7)));
+  return [...set].sort().reverse();
+}
+function labelMes(ym){ const [y,m]=ym.split('-'); return `${MESES_ES[+m-1]} ${y}`; }
 let perfilProdPeriod=6;   // meses del gráfico de tendencia
 let prodChart=null;
 
@@ -1304,17 +1469,29 @@ function historialTransHTML(regs,tipo){
 }
 
 /* ---- CLIENTE / PROVEEDOR ---- */
-function entidadCardHTML(id,modal){
+function entidadCardHTML(id,modal,periodo){
   const e=ent(id); if(!e) return '<div class="empty"><p>Contacto no encontrado</p></div>';
-  const ventas=ventasDeEntidad(id), compras=comprasDeEntidad(id);
-  const cxc=cuentasVivas(id,'cxc'), cxp=cuentasVivas(id,'cxp');
-  const esCliente   = e.tipo==='cliente'   || e.tipo==='ambos' || ventas.length>0;
-  const esProveedor = e.tipo==='proveedor' || e.tipo==='ambos' || compras.length>0;
+  const p = periodo || perfilPeriodo || 'todo';
+  const ventas=ventasDeEntidad(id).filter(v=>matchPerfilPeriodo(v.fecha,p));
+  const compras=comprasDeEntidad(id).filter(c=>matchPerfilPeriodo(c.fecha,p));
+  // El estado de cuenta (saldos abiertos) se filtra por fecha de origen de la cuenta
+  const cxc=cuentasVivas(id,'cxc').filter(ct=>matchPerfilPeriodo(ct.fechaOrigen,p));
+  const cxp=cuentasVivas(id,'cxp').filter(ct=>matchPerfilPeriodo(ct.fechaOrigen,p));
+  const esCliente   = e.tipo==='cliente'   || e.tipo==='ambos' || ventasDeEntidad(id).length>0;
+  const esProveedor = e.tipo==='proveedor' || e.tipo==='ambos' || comprasDeEntidad(id).length>0;
 
   const totVend=ventas.reduce((a,v)=>a+v.total,0);
   const totComp=compras.reduce((a,c)=>a+compraTotal(c),0);
   const saldoCxC=cxc.reduce((a,ct)=>a+cuentaSaldo(ct),0);
   const saldoCxP=cxp.reduce((a,ct)=>a+cuentaSaldo(ct),0);
+
+  const meses=mesesDeEntidad(id);
+  const selectorPeriodo=`<select class="input" id="perfilPerSel" style="width:auto;min-width:150px">
+      <option value="todo" ${p==='todo'?'selected':''}>Todo el histórico</option>
+      <option value="mes-actual" ${p==='mes-actual'?'selected':''}>Mes actual</option>
+      ${meses.length?'<option disabled>──────────</option>':''}
+      ${meses.map(ym=>`<option value="${ym}" ${p===ym?'selected':''}>${labelMes(ym)}</option>`).join('')}
+    </select>`;
 
   let head=`<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap">
     <div style="font-size:12.5px;color:var(--text-soft)">
@@ -1322,7 +1499,10 @@ function entidadCardHTML(id,modal){
       ${e.telefono?`&nbsp;·&nbsp;<i data-lucide="phone" style="width:12px;height:12px;vertical-align:-1px"></i> ${esc(e.telefono)}`:''}
       ${e.notas?`<div class="muted" style="margin-top:6px">${esc(e.notas)}</div>`:''}
     </div>
-    ${modal?`<button class="btn btn-ghost btn-sm" id="verPerfilEnt"><i data-lucide="expand"></i>Ver perfil completo</button>`:''}
+    <div style="display:flex;align-items:center;gap:10px">
+      ${selectorPeriodo}
+      ${modal?`<button class="btn btn-ghost btn-sm" id="verPerfilEnt"><i data-lucide="expand"></i>Ver perfil completo</button>`:''}
+    </div>
   </div>`;
 
   let ventaBlock='';
@@ -1347,16 +1527,19 @@ function entidadCardHTML(id,modal){
   return head+ventaBlock+sep+compraBlock;
 }
 function mountEntidadCard(id,el,modal){
-  el.innerHTML=entidadCardHTML(id,modal); icons();
+  el.innerHTML=entidadCardHTML(id,modal,perfilPeriodo); icons();
   const vp=el.querySelector('#verPerfilEnt');
   if(vp) vp.onclick=()=>{ closeModal(); abrirPerfilEntidad(id); };
+  const sel=el.querySelector('#perfilPerSel');
+  if(sel) sel.onchange=()=>{ perfilPeriodo=sel.value; mountEntidadCard(id,el,modal); };
 }
 function openCardEntidad(id){
+  perfilPeriodo='todo';
   const e=ent(id);
   openModal(e?esc(e.nombre):'Contacto','<div id="cardEntBody"></div>',null,null,{wide:true});
   mountEntidadCard(id,document.getElementById('cardEntBody'),true);
 }
-function abrirPerfilEntidad(id){ perfilEntId=id; current='perfil-entidad'; renderNav(); render(); document.querySelector('.content').scrollTop=0; }
+function abrirPerfilEntidad(id){ perfilPeriodo='todo'; perfilEntId=id; current='perfil-entidad'; renderNav(); render(); document.querySelector('.content').scrollTop=0; }
 function renderPerfilEntidad(c){
   const e=ent(perfilEntId);
   setTop(e?esc(e.nombre):'Contacto','Perfil de cliente / proveedor',`<button class="btn btn-ghost" onclick="navigate('entidades')"><i data-lucide="arrow-left"></i>Volver</button>`);
@@ -1674,6 +1857,14 @@ function renderFinanzas(c){
   const totalSalidas = pagadoCompras + pagadoGastos;
   const flujoNeto = cobrado - totalSalidas;
 
+  // ── Reparto de utilidades (histórico acumulado, independiente del período) ──
+  const ingresosHist = ventasActivas().reduce((a,v)=>a+v.total,0);
+  const cogsHist     = ventasActivas().reduce((a,v)=>a+costoVentaReal(v),0);
+  const opexHist     = DB.gastos.reduce((a,g)=>a+g.monto,0);
+  const utilNetaHist = ingresosHist - cogsHist - opexHist;
+  const totalRetirado= (DB.retiros||[]).reduce((a,r)=>a+r.monto,0);
+  const dispRepartir = utilNetaHist - totalRetirado;
+
   // ── HTML ──
   const periodos = [{k:'hoy',l:'Hoy'},{k:'semana',l:'Semana'},{k:'mes',l:'Mes'},{k:'todo',l:'Todo'}];
   const fmtPct = n=>`<span style="font-weight:700;color:${n>=0?'var(--green)':'var(--red)'}">${n.toFixed(1)}%</span>`;
@@ -1685,7 +1876,8 @@ function renderFinanzas(c){
     </div>
     <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:18px;margin-bottom:18px" id="finCols">
 
-      <!-- Estado de Resultados -->
+      <!-- Columna izquierda: Estado de Resultados + Reparto -->
+      <div style="display:flex;flex-direction:column;gap:18px">
       <div class="card">
         <div class="card-head"><h3>Estado de Resultados</h3><span class="badge gray">${finPeriodo}</span></div>
         <div style="padding:0 20px 20px">
@@ -1735,6 +1927,8 @@ function renderFinanzas(c){
           <div style="text-align:right;font-size:12px;color:var(--text-soft);margin-top:6px">Margen Neto: ${fmtPct(margenNeto)}</div>
         </div>
       </div>
+      ${can('repartoUtil')?repartoCardHTML(utilNetaHist,totalRetirado,dispRepartir,utilNeta,finPeriodo):''}
+      </div>
 
       <!-- Columna derecha: KPIs + Flujo -->
       <div style="display:flex;flex-direction:column;gap:18px">
@@ -1773,10 +1967,10 @@ function renderFinanzas(c){
               <span style="color:var(--text-soft)">(−) Gastos operativos</span>
               <span style="color:var(--red);font-weight:600">−${fmt(pagadoGastos)}</span>
             </div>
-            <div style="display:flex;justify-content:space-between;padding:14px 0 4px;font-weight:700;font-size:1.05rem">
+            ${can('flujoNeto')?`<div style="display:flex;justify-content:space-between;padding:14px 0 4px;font-weight:700;font-size:1.05rem">
               <span>Flujo neto del período</span>
               <span style="color:${flujoNeto>=0?'var(--green)':'var(--red)'}">${flujoNeto>=0?'+':''}${fmt(flujoNeto)}</span>
-            </div>
+            </div>`:''}
           </div>
         </div>
 
@@ -1803,8 +1997,69 @@ function renderFinanzas(c){
     </div>`;
 
   document.querySelectorAll('#finSeg button').forEach(b=>b.onclick=()=>{ finPeriodo=b.dataset.fp; renderFinanzas(c); icons(); });
+  const br=document.getElementById('btnRetiro'); if(br) br.onclick=openRetiroModal;
   if(window.innerWidth<900) document.getElementById('finCols').style.gridTemplateColumns='1fr';
   icons();
+}
+
+/* ---- Reparto de utilidades: tarjeta + retiros ---- */
+function repartoCardHTML(utilHist, retirado, disp, utilPeriodo, p){
+  const retiros=(DB.retiros||[]).slice().sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const falta=window.__retirosTablaFalta;
+  return `<div class="card">
+    <div class="card-head"><h3>Reparto de Utilidades</h3><span class="badge indigo">solo dueño</span></div>
+    <div style="padding:0 20px 20px">
+      ${falta?`<div class="reparto-warn"><i data-lucide="alert-triangle"></i><span>Para guardar retiros falta crear la tabla <strong>ayp_retiros</strong> en Supabase. Puedes ver el cálculo, pero el registro está deshabilitado hasta correr el SQL.</span></div>`:''}
+      <div class="reparto-stats">
+        <div class="reparto-stat"><div class="rs-lbl">Utilidad neta acum.</div><div class="rs-val" style="color:${utilHist>=0?'var(--green)':'var(--red)'}">${fmt(utilHist)}</div></div>
+        <div class="reparto-stat"><div class="rs-lbl">Total retirado</div><div class="rs-val">${fmt(retirado)}</div></div>
+        <div class="reparto-stat"><div class="rs-lbl">Disponible</div><div class="rs-val" style="color:${disp>=0?'var(--green)':'var(--red)'}">${fmt(disp)}</div></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:var(--text-soft);margin-bottom:14px;flex-wrap:wrap">
+        <span>Utilidad neta del período (${p}): <strong style="color:${utilPeriodo>=0?'var(--green)':'var(--red)'}">${fmt(utilPeriodo)}</strong></span>
+        <button class="btn btn-primary btn-sm" id="btnRetiro" ${falta?'disabled style="opacity:.5;cursor:not-allowed"':''}><i data-lucide="plus"></i>Registrar retiro</button>
+      </div>
+      ${retiros.length?`<div class="tbl-wrap"><table>
+        <thead><tr><th>Fecha</th><th>Nota</th><th class="num">Monto</th><th></th></tr></thead>
+        <tbody>${retiros.map(r=>`<tr>
+          <td class="muted">${fmtDate(r.fecha)}</td>
+          <td>${esc(r.nota||'Retiro de utilidades')}</td>
+          <td class="num" style="font-weight:700;color:var(--red)">−${fmt(r.monto)}</td>
+          <td><button class="btn-icon" onclick="deleteRetiro('${r.id}')" style="color:var(--red)" title="Eliminar retiro"><i data-lucide="trash-2"></i></button></td>
+        </tr>`).join('')}</tbody>
+      </table></div>`:`<div class="empty" style="padding:22px 20px"><i data-lucide="hand-coins"></i><p>Sin retiros registrados</p></div>`}
+    </div>
+  </div>`;
+}
+function openRetiroModal(){
+  if(window.__retirosTablaFalta){ toast('Primero crea la tabla ayp_retiros','alert-triangle'); return; }
+  openModal('Registrar retiro de utilidades',`
+    <div class="form-group"><label>Fecha</label>
+      <input type="date" id="rFecha" class="input" value="${todayISO()}"></div>
+    <div class="form-group"><label>Monto</label>
+      <input type="number" id="rMonto" class="input" min="0" step="0.01" placeholder="0.00"></div>
+    <div class="form-group"><label>Nota <span style="color:var(--text-soft);font-weight:400">(opcional)</span></label>
+      <input type="text" id="rNota" class="input" placeholder="Ej: retiro mensual, reinversión…"></div>
+  `, async ()=>{
+    const fecha=document.getElementById('rFecha').value||todayISO();
+    const monto=parseFloat(document.getElementById('rMonto').value)||0;
+    const nota=document.getElementById('rNota').value.trim();
+    if(monto<=0){ alert('Ingresa un monto válido'); return; }
+    const id=uid();
+    try{
+      await sbInsert('ayp_retiros',[{id,fecha,monto,nota,socio:SESION?SESION.nombre:'Pablo'}]);
+      DB.retiros.unshift({id,fecha,monto,nota,socio:SESION?SESION.nombre:'Pablo'});
+      closeModal(); toast('Retiro registrado','check-circle');
+      render();
+    }catch(e){ alert('Error al guardar: '+e.message); }
+  }, 'Registrar retiro');
+}
+async function deleteRetiro(id){
+  if(!confirm('¿Eliminar este retiro?')) return;
+  try{ await sbDelete('ayp_retiros',id); }catch(e){ alert('Error: '+e.message); return; }
+  DB.retiros=(DB.retiros||[]).filter(r=>r.id!==id);
+  toast('Retiro eliminado','trash-2');
+  render();
 }
 /* =========================================================
    NAV — Event delegation (sobrevive re-renders de lucide)
@@ -1818,20 +2073,123 @@ document.querySelector('.sidebar').addEventListener('click', e=>{
 /* =========================================================
    INIT
    ========================================================= */
-async function init(){
+/* ---------- LOGIN: seleccion de perfil + PIN ---------- */
+let loginSel=null, loginPin='';
+function showLogin(){
+  const ls=document.getElementById('loadingScreen'); ls.classList.add('hidden');
+  document.getElementById('loginScreen').style.display='flex';
+  loginSel=null; loginPin=''; renderLoginStep();
+}
+function renderLoginStep(){
+  const el=document.getElementById('loginBox');
+  if(!loginSel){
+    el.innerHTML=`
+      <div class="login-head">
+        <div class="login-logo"><i data-lucide="boxes"></i></div>
+        <h1>Sistema AyP</h1>
+        <p>Selecciona tu perfil para continuar</p>
+      </div>
+      <div class="login-profiles">
+        ${USUARIOS.map(u=>`
+          <button class="login-profile" data-uid="${u.id}">
+            <span class="lp-ic"><i data-lucide="${u.icon}"></i></span>
+            <span><span class="lp-name">${esc(u.nombre)}</span><span class="lp-role">${esc(u.label)}</span></span>
+          </button>`).join('')}
+      </div>`;
+    icons();
+    el.querySelectorAll('[data-uid]').forEach(b=>b.onclick=()=>{ loginSel=USUARIOS.find(u=>u.id===b.dataset.uid); loginPin=''; renderLoginStep(); });
+  } else {
+    el.innerHTML=`
+      <div class="login-head">
+        <button class="login-back" id="lpBack"><i data-lucide="arrow-left"></i></button>
+        <span class="lp-ic big"><i data-lucide="${loginSel.icon}"></i></span>
+        <h1>${esc(loginSel.nombre)}</h1>
+        <p>${esc(loginSel.label)} · ingresa tu PIN</p>
+      </div>
+      <div class="pin-dots" id="pinDots">${[0,1,2,3].map(i=>`<span class="pin-dot ${loginPin.length>i?'on':''}"></span>`).join('')}</div>
+      <div class="pin-err" id="pinErr"></div>
+      <div class="pin-pad">
+        ${['1','2','3','4','5','6','7','8','9','','0','del'].map(k=>{
+          if(k==='') return `<span></span>`;
+          if(k==='del') return `<button class="pin-key pin-del" data-k="del"><i data-lucide="delete"></i></button>`;
+          return `<button class="pin-key" data-k="${k}">${k}</button>`;
+        }).join('')}
+      </div>`;
+    icons();
+    document.getElementById('lpBack').onclick=()=>{ loginSel=null; loginPin=''; renderLoginStep(); };
+    el.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>pinPress(b.dataset.k));
+  }
+}
+function pinPress(k){
+  const err=document.getElementById('pinErr'); if(err) err.textContent='';
+  if(k==='del') loginPin=loginPin.slice(0,-1);
+  else if(loginPin.length<4) loginPin+=k;
+  document.querySelectorAll('#pinDots .pin-dot').forEach((d,i)=>d.classList.toggle('on',loginPin.length>i));
+  if(loginPin.length===4){
+    const intento=loginPin;
+    setTimeout(()=>{
+      if(intento===loginSel.pin){
+        guardarSesion(loginSel);
+        document.getElementById('loginScreen').style.display='none';
+        arrancarApp();
+      } else {
+        loginPin='';
+        const e=document.getElementById('pinErr'); if(e) e.textContent='PIN incorrecto';
+        const dots=document.getElementById('pinDots'); if(dots){ dots.classList.add('shake'); setTimeout(()=>dots.classList.remove('shake'),400); }
+        document.querySelectorAll('#pinDots .pin-dot').forEach(d=>d.classList.remove('on'));
+      }
+    },110);
+  }
+}
+// Soporte de teclado fisico para el PIN
+document.addEventListener('keydown', e=>{
+  const scr=document.getElementById('loginScreen');
+  if(!scr || scr.style.display==='none' || !loginSel) return;
+  if(/^[0-9]$/.test(e.key)) pinPress(e.key);
+  else if(e.key==='Backspace') pinPress('del');
+});
+
+/* ---------- Chip de usuario + logout ---------- */
+function renderUserChip(){
+  const el=document.getElementById('userChip'); if(!el||!SESION) return;
+  const u=USUARIOS.find(x=>x.id===SESION.id)||{icon:'user-round'};
+  el.innerHTML=`
+    <div class="user-chip">
+      <span class="uc-ic"><i data-lucide="${u.icon}"></i></span>
+      <div class="uc-info"><span class="uc-name">${esc(SESION.nombre)}</span><span class="uc-role">${esc(SESION.label)}</span></div>
+      <button class="uc-out" id="ucOut" title="Cerrar sesion"><i data-lucide="log-out"></i></button>
+    </div>`;
+  icons();
+  const out=document.getElementById('ucOut'); if(out) out.onclick=cerrarSesion;
+}
+
+/* ---------- Arranque de la app (tras validar sesion) ---------- */
+async function arrancarApp(){
+  const ls=document.getElementById('loadingScreen');
+  ls.classList.remove('hidden'); ls.style.display='flex';
+  document.getElementById('loginScreen').style.display='none';
   try{
     await loadAll();
+    await loadRetiros();
     await seedIfEmpty();
-    document.getElementById('loadingScreen').classList.add('hidden');
+    ls.classList.add('hidden');
     document.getElementById('appShell').style.display='flex';
+    renderUserChip();
     renderNav(); render(); icons();
     initRealtime();
     initVisibilityReload();
     setSyncStatus('ok');
   }catch(err){
     document.getElementById('loadingMsg').textContent='Error al conectar con Supabase: '+err.message;
-    document.querySelector('.loading-screen .spinner').style.display='none';
+    const sp=document.querySelector('.loading-screen .spinner'); if(sp) sp.style.display='none';
   }
+}
+
+/* ---------- Punto de entrada: sesion guardada o login ---------- */
+function startup(){
+  const s=sesionGuardada();
+  if(s){ SESION=s; arrancarApp(); }
+  else{ showLogin(); }
 }
 
 /* =========================================================
@@ -1875,7 +2233,7 @@ let tries=0;
 (function boot(){
   const lReady=window.lucide||window.__lucideFailed;
   const cReady=window.Chart||window.__chartFailed;
-  if((lReady&&cReady)||tries>25){ init(); }
+  if((lReady&&cReady)||tries>25){ startup(); }
   else{ tries++; setTimeout(boot,80); }
 })();
 </script>
