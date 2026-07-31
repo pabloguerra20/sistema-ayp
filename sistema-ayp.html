@@ -321,7 +321,7 @@ async function sbDelete(table, id){
    criptografico. Para uso interno entre Pablo y Adrian basta.
    ============================================================ */
 const USUARIOS = [
-  { id:'pablo',  nombre:'Pablo',  rol:'dueno',    label:'Dueño',     icon:'crown',      pin:'2580' },
+  { id:'pablo',  nombre:'Pablo',  rol:'dueno',    label:'Dueño',     icon:'user-round', pin:'2580' },
   { id:'adrian', nombre:'Adrián', rol:'empleado', label:'Operación', icon:'user-round', pin:'1379' },
 ];
 // true = ese rol PUEDE ver la informacion
@@ -2093,7 +2093,7 @@ function renderLoginStep(){
         ${USUARIOS.map(u=>`
           <button class="login-profile" data-uid="${u.id}">
             <span class="lp-ic"><i data-lucide="${u.icon}"></i></span>
-            <span><span class="lp-name">${esc(u.nombre)}</span><span class="lp-role">${esc(u.label)}</span></span>
+            <span><span class="lp-name">${esc(u.nombre)}</span></span>
           </button>`).join('')}
       </div>`;
     icons();
@@ -2104,7 +2104,7 @@ function renderLoginStep(){
         <button class="login-back" id="lpBack"><i data-lucide="arrow-left"></i></button>
         <span class="lp-ic big"><i data-lucide="${loginSel.icon}"></i></span>
         <h1>${esc(loginSel.nombre)}</h1>
-        <p>${esc(loginSel.label)} · ingresa tu PIN</p>
+        <p>Ingresa tu PIN</p>
       </div>
       <div class="pin-dots" id="pinDots">${[0,1,2,3].map(i=>`<span class="pin-dot ${loginPin.length>i?'on':''}"></span>`).join('')}</div>
       <div class="pin-err" id="pinErr"></div>
@@ -2156,7 +2156,7 @@ function renderUserChip(){
   el.innerHTML=`
     <div class="user-chip">
       <span class="uc-ic"><i data-lucide="${u.icon}"></i></span>
-      <div class="uc-info"><span class="uc-name">${esc(SESION.nombre)}</span><span class="uc-role">${esc(SESION.label)}</span></div>
+      <div class="uc-info"><span class="uc-name">${esc(SESION.nombre)}</span></div>
       <button class="uc-out" id="ucOut" title="Cerrar sesion"><i data-lucide="log-out"></i></button>
     </div>`;
   icons();
