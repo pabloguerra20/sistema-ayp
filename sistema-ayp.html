@@ -2209,7 +2209,7 @@ document.querySelector('.sidebar').addEventListener('click', e=>{
    ========================================================= */
 /* ---------- LOGIN: correo + contraseña ---------- */
 function showLogin(){
-  const ls=document.getElementById('loadingScreen'); ls.classList.add('hidden');
+  const ls=document.getElementById('loadingScreen'); ls.classList.add('hidden'); ls.style.display='none';
   document.getElementById('loginScreen').style.display='flex';
   renderLoginForm();
 }
@@ -2282,7 +2282,7 @@ async function arrancarApp(){
     await loadAll();  // loadAll ya trae timeout por tabla y progreso
     await seedIfEmpty();
     try{ await loadUsuarios(); }catch(_){}
-    ls.classList.add('hidden');
+    ls.classList.add('hidden'); ls.style.display='none';   // forzar inline: la clase .hidden no vence al display:flex inline
     document.getElementById('appShell').style.display='flex';
     renderUserChip();
     renderNav(); render(); icons();
