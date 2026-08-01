@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js" onerror="window.__lucideFailed=true"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" onerror="window.__chartFailed=true"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.47.10/dist/umd/supabase.min.js" onerror="window.__supaFailed=true"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js" onerror="window.__supaFailed=true"></script>
 <style>
 :root{
   --bg:#f8f8f8; --surface:#ffffff; --surface-2:#f3f3f5;
@@ -237,6 +237,8 @@ textarea.input{resize:vertical;min-height:64px}
 .reparto-warn{background:var(--amber-soft);color:#92400e;border-radius:9px;padding:10px 12px;font-size:12px;font-weight:500;margin-bottom:12px;display:flex;gap:8px;align-items:flex-start}
 .reparto-warn i{width:15px;height:15px;flex-shrink:0;margin-top:1px}
 @media(max-width:520px){ .reparto-stats{grid-template-columns:1fr} }
+.login-form{margin-top:4px}
+.login-form .field{margin-bottom:14px;text-align:left}
 </style>
 </head>
 <body>
@@ -352,30 +354,31 @@ async function sbDelete(table, id){
    Nota: este control oculta informacion en la UI. No es un candado
    criptografico. Para uso interno entre Pablo y Adrian basta.
    ============================================================ */
-const USUARIOS = [
-  { id:'pablo',  nombre:'Pablo',  rol:'dueno',    label:'Dueño',     icon:'user-round', pin:'2580' },
-  { id:'adrian', nombre:'Adrián', rol:'empleado', label:'Operación', icon:'user-round', pin:'1379' },
-];
 // true = ese rol PUEDE ver la informacion
 const PERMISOS = {
   dueno:    { repartoUtil:true,  flujoNeto:true,  saldoAcum:true  },
   empleado: { repartoUtil:false, flujoNeto:false, saldoAcum:false },
 };
-let SESION = null; // {id, nombre, rol, label}
+function rolLabel(r){ return r==='dueno' ? 'Dueño' : 'Operación'; }
+let SESION = null; // {id, email, nombre, rol, label}
 function can(p){ return !!(SESION && PERMISOS[SESION.rol] && PERMISOS[SESION.rol][p]); }
 function esDueno(){ return !!(SESION && SESION.rol==='dueno'); }
+async function hashPass(pw){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
 function guardarSesion(u){
-  SESION = { id:u.id, nombre:u.nombre, rol:u.rol, label:u.label };
-  try{ localStorage.setItem('ayp_sesion', JSON.stringify(SESION)); }catch(e){}
+  SESION = { id:u.id, email:u.email, nombre:u.nombre, rol:u.rol, label:rolLabel(u.rol) };
+  try{ localStorage.setItem('ayp_sesion_v2', JSON.stringify(SESION)); }catch(e){}
 }
 function cerrarSesion(){
-  try{ localStorage.removeItem('ayp_sesion'); }catch(e){}
+  try{ localStorage.removeItem('ayp_sesion_v2'); }catch(e){}
   SESION=null; location.reload();
 }
 function sesionGuardada(){
   try{
-    const s=JSON.parse(localStorage.getItem('ayp_sesion')||'null');
-    if(s && USUARIOS.some(u=>u.id===s.id && u.rol===s.rol)) return s;
+    const s=JSON.parse(localStorage.getItem('ayp_sesion_v2')||'null');
+    if(s && s.id && PERMISOS[s.rol]) return s;
   }catch(e){}
   return null;
 }
@@ -403,7 +406,7 @@ function setSyncStatus(s){ // 'ok'|'syncing'|'error'
 }
 
 /* ---------- Estado en memoria ---------- */
-let DB = { productos:[], entidades:[], ventas:[], compras:[], cuentas:[], abonos:[], gastos:[], retiros:[] };
+let DB = { productos:[], entidades:[], ventas:[], compras:[], cuentas:[], abonos:[], gastos:[], retiros:[], usuarios:[] };
 
 /* ---------- Carga inicial (paralela) ---------- */
 async function loadAll(){
@@ -470,6 +473,13 @@ async function loadRetiros(){
   }catch(e){
     window.__retirosTablaFalta = true;
   }
+}
+
+/* ---------- Usuarios (login por correo + contraseña) ---------- */
+async function loadUsuarios(){
+  const rows = await sbGet('ayp_usuarios', {order:'created_at', asc:true});
+  DB.usuarios = rows.map(u=>({ id:u.id, email:u.email, nombre:u.nombre, rol:u.rol, activo:u.activo!==false, passHash:u.pass_hash }));
+  return DB.usuarios;
 }
 
 /* ---------- Realtime (SDK oficial) — canal único con debounce ---------- */
@@ -619,14 +629,19 @@ const NAV_GROUPS=[
     {id:'productos',label:'Productos',icon:'package'},
     {id:'entidades',label:'Clientes y Proveedores',icon:'contact'},
   ]},
+  {cat:'Administración', soloDueno:true, items:[
+    {id:'usuarios',label:'Usuarios y Accesos',icon:'users', soloDueno:true},
+  ]},
 ];
 let current='dashboard';
 function renderNav(){
-  document.getElementById('nav').innerHTML=NAV_GROUPS.map(g=>
-    `<div class="nav-label">${g.cat}</div>`+g.items.map(v=>
+  document.getElementById('nav').innerHTML=NAV_GROUPS.filter(g=>!(g.soloDueno&&!esDueno())).map(g=>{
+    const items=g.items.filter(v=>!(v.soloDueno&&!esDueno()));
+    if(!items.length) return '';
+    return `<div class="nav-label">${g.cat}</div>`+items.map(v=>
       `<button class="nav-item ${current===v.id?'active':''}" data-view="${v.id}"><i data-lucide="${v.icon}"></i><span>${v.label}</span></button>`
-    ).join('')
-  ).join('');
+    ).join('');
+  }).join('');
   // Solo clase activa — clicks van por event delegation en sidebar
   document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===current));
   icons();
@@ -658,6 +673,7 @@ function render(){
   else if(current==='perfil-producto') renderPerfilProducto(c);
   else if(current==='gastos') renderGastos(c);
   else if(current==='finanzas') renderFinanzas(c);
+  else if(current==='usuarios') renderUsuarios(c);
   // Reinyectar el banner al inicio del contenido
   if(banner) c.prepend(banner);
   icons();
@@ -2100,6 +2116,73 @@ async function deleteRetiro(id){
   render();
 }
 /* =========================================================
+   USUARIOS Y ACCESOS  (solo dueño)
+   ========================================================= */
+function renderUsuarios(c){
+  if(!esDueno()){ c.innerHTML='<div class="empty"><i data-lucide="lock"></i><p>Sin acceso</p></div>'; icons(); return; }
+  setTop('Usuarios y Accesos','Controla quién entra y con qué permisos',`<button class="btn btn-primary" onclick="openUsuarioModal()"><i data-lucide="user-plus"></i>Nuevo usuario</button>`);
+  const us=DB.usuarios.slice().sort((a,b)=>(a.nombre||a.email).localeCompare(b.nombre||b.email));
+  c.innerHTML=`<div class="card"><div class="tbl-wrap"><table>
+    <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Acceso a dinero</th><th>Estado</th><th></th></tr></thead>
+    <tbody>${us.length?us.map(u=>`<tr style="${u.activo?'':'opacity:.5'}">
+      <td style="font-weight:600">${esc(u.nombre||'—')}</td>
+      <td class="muted">${esc(u.email)}</td>
+      <td>${u.rol==='dueno'?'<span class="badge indigo">Dueño</span>':'<span class="badge gray">Operación</span>'}</td>
+      <td class="muted" style="font-size:12px">${u.rol==='dueno'?'Total (reparto, flujo, saldos)':'Limitado (sin reparto ni flujo neto)'}</td>
+      <td>${u.activo?'<span class="badge green"><span class="dot"></span>Activo</span>':'<span class="badge gray">Inactivo</span>'}</td>
+      <td><div class="row-actions">
+        <button class="btn-icon" onclick="openUsuarioModal('${u.id}')" title="Editar"><i data-lucide="pencil"></i></button>
+        <button class="btn-icon" onclick="toggleUsuario('${u.id}')" title="${u.activo?'Desactivar':'Activar'}"><i data-lucide="${u.activo?'user-x':'user-check'}"></i></button>
+        ${u.id===SESION.id?'':`<button class="btn-icon" onclick="deleteUsuario('${u.id}')" style="color:var(--red)" title="Eliminar"><i data-lucide="trash-2"></i></button>`}
+      </div></td>
+    </tr>`).join(''):`<tr><td colspan="6"><div class="empty"><i data-lucide="users"></i><p>Sin usuarios</p></div></td></tr>`}
+  </tbody></table></div></div>
+  <p class="hint" style="margin-top:12px"><strong>Dueño</strong>: ve todo, incluido Reparto de Utilidades, flujo neto y saldos. &nbsp;<strong>Operación</strong>: registra y opera el negocio, pero no ve tus utilidades ni el dinero disponible.</p>`;
+  icons();
+}
+function openUsuarioModal(id){
+  const u=id?DB.usuarios.find(x=>x.id===id):null;
+  openModal(u?'Editar usuario':'Nuevo usuario',`
+    <div class="field"><label>Nombre</label><input class="input" id="u_nombre" value="${u?esc(u.nombre||''):''}" placeholder="Nombre de la persona"></div>
+    <div class="field"><label>Correo</label><input class="input" id="u_email" type="email" value="${u?esc(u.email):''}" placeholder="correo@ayp.mx"></div>
+    <div class="field"><label>Rol / Permisos</label><select class="input" id="u_rol">
+      <option value="empleado" ${u&&u.rol==='empleado'?'selected':''}>Operación (limitado)</option>
+      <option value="dueno" ${u&&u.rol==='dueno'?'selected':''}>Dueño (acceso total)</option>
+    </select></div>
+    <div class="field"><label>Contraseña ${u?'<span style="color:var(--text-soft);font-weight:400">(dejar vacío para no cambiarla)</span>':''}</label><input class="input" id="u_pass" type="text" placeholder="${u?'sin cambios':'Contraseña de acceso'}"></div>
+  `, async ()=>{
+    const nombre=document.getElementById('u_nombre').value.trim();
+    const email=document.getElementById('u_email').value.trim().toLowerCase();
+    const rol=document.getElementById('u_rol').value;
+    const pass=document.getElementById('u_pass').value;
+    if(!email){ alert('Escribe un correo'); return; }
+    if(!u && !pass){ alert('Escribe una contraseña para el nuevo usuario'); return; }
+    try{
+      if(u){
+        const body={nombre,email,rol};
+        if(pass) body.pass_hash=await hashPass(pass);
+        await sbUpdate('ayp_usuarios',u.id,body);
+      } else {
+        await sbInsert('ayp_usuarios',[{id:uid(),nombre,email,rol,pass_hash:await hashPass(pass),activo:true}]);
+      }
+      await loadUsuarios(); closeModal(); render(); toast('Usuario guardado','check-circle');
+    }catch(e){ alert('Error: '+e.message+(String(e.message).toLowerCase().includes('duplicate')?' — ese correo ya está registrado.':'')); }
+  }, u?'Guardar':'Crear usuario');
+}
+async function toggleUsuario(id){
+  const u=DB.usuarios.find(x=>x.id===id); if(!u) return;
+  if(u.id===SESION.id){ toast('No puedes desactivar tu propia cuenta','alert-triangle'); return; }
+  try{ await sbUpdate('ayp_usuarios',id,{activo:!u.activo}); await loadUsuarios(); render(); }
+  catch(e){ alert('Error: '+e.message); }
+}
+async function deleteUsuario(id){
+  if(id===SESION.id){ toast('No puedes eliminar tu propia cuenta','alert-triangle'); return; }
+  if(!confirm('¿Eliminar este usuario? Ya no podrá entrar.')) return;
+  try{ await sbDelete('ayp_usuarios',id); await loadUsuarios(); render(); toast('Usuario eliminado','trash-2'); }
+  catch(e){ alert('Error: '+e.message); }
+}
+
+/* =========================================================
    NAV — Event delegation (sobrevive re-renders de lucide)
    ========================================================= */
 // El script es defer-equivalent (al final del body), sidebar ya existe
@@ -2111,91 +2194,67 @@ document.querySelector('.sidebar').addEventListener('click', e=>{
 /* =========================================================
    INIT
    ========================================================= */
-/* ---------- LOGIN: seleccion de perfil + PIN ---------- */
-let loginSel=null, loginPin='';
+/* ---------- LOGIN: correo + contraseña ---------- */
 function showLogin(){
   const ls=document.getElementById('loadingScreen'); ls.classList.add('hidden');
   document.getElementById('loginScreen').style.display='flex';
-  loginSel=null; loginPin=''; renderLoginStep();
+  renderLoginForm();
 }
-function renderLoginStep(){
+function renderLoginForm(){
   const el=document.getElementById('loginBox');
-  if(!loginSel){
-    el.innerHTML=`
-      <div class="login-head">
-        <div class="login-logo"><i data-lucide="boxes"></i></div>
-        <h1>Sistema AyP</h1>
-        <p>Selecciona tu perfil para continuar</p>
-      </div>
-      <div class="login-profiles">
-        ${USUARIOS.map(u=>`
-          <button class="login-profile" data-uid="${u.id}">
-            <span class="lp-ic"><i data-lucide="${u.icon}"></i></span>
-            <span><span class="lp-name">${esc(u.nombre)}</span></span>
-          </button>`).join('')}
-      </div>`;
-    icons();
-    el.querySelectorAll('[data-uid]').forEach(b=>b.onclick=()=>{ loginSel=USUARIOS.find(u=>u.id===b.dataset.uid); loginPin=''; renderLoginStep(); });
-  } else {
-    el.innerHTML=`
-      <div class="login-head">
-        <button class="login-back" id="lpBack"><i data-lucide="arrow-left"></i></button>
-        <span class="lp-ic big"><i data-lucide="${loginSel.icon}"></i></span>
-        <h1>${esc(loginSel.nombre)}</h1>
-        <p>Ingresa tu PIN</p>
-      </div>
-      <div class="pin-dots" id="pinDots">${[0,1,2,3].map(i=>`<span class="pin-dot ${loginPin.length>i?'on':''}"></span>`).join('')}</div>
-      <div class="pin-err" id="pinErr"></div>
-      <div class="pin-pad">
-        ${['1','2','3','4','5','6','7','8','9','','0','del'].map(k=>{
-          if(k==='') return `<span></span>`;
-          if(k==='del') return `<button class="pin-key pin-del" data-k="del"><i data-lucide="delete"></i></button>`;
-          return `<button class="pin-key" data-k="${k}">${k}</button>`;
-        }).join('')}
-      </div>`;
-    icons();
-    document.getElementById('lpBack').onclick=()=>{ loginSel=null; loginPin=''; renderLoginStep(); };
-    el.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>pinPress(b.dataset.k));
+  el.innerHTML=`
+    <div class="login-head">
+      <div class="login-logo"><i data-lucide="boxes"></i></div>
+      <h1>Sistema AyP</h1>
+      <p>Inicia sesión para continuar</p>
+    </div>
+    <div class="login-form">
+      <div class="field"><label>Correo</label>
+        <input class="input" type="email" id="lg_email" placeholder="tucorreo@ayp.mx" autocomplete="username"></div>
+      <div class="field"><label>Contraseña</label>
+        <input class="input" type="password" id="lg_pass" placeholder="••••••••" autocomplete="current-password"></div>
+      <div class="pin-err" id="lg_err"></div>
+      <button class="btn btn-primary" id="lg_btn" style="width:100%;justify-content:center"><i data-lucide="log-in"></i>Entrar</button>
+    </div>`;
+  icons();
+  const btn=document.getElementById('lg_btn');
+  btn.onclick=hacerLogin;
+  document.getElementById('lg_pass').addEventListener('keydown',e=>{ if(e.key==='Enter') hacerLogin(); });
+  document.getElementById('lg_email').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('lg_pass').focus(); });
+  setTimeout(()=>{ const f=document.getElementById('lg_email'); if(f) f.focus(); },60);
+}
+async function hacerLogin(){
+  const email=(document.getElementById('lg_email').value||'').trim().toLowerCase();
+  const pass=document.getElementById('lg_pass').value||'';
+  const err=document.getElementById('lg_err'); const btn=document.getElementById('lg_btn');
+  if(err) err.textContent='';
+  if(!email || !pass){ if(err) err.textContent='Escribe tu correo y contraseña'; return; }
+  btn.disabled=true; btn.innerHTML='<i data-lucide="loader"></i>Verificando…'; icons();
+  try{
+    await loadUsuarios();
+    const h=await hashPass(pass);
+    const u=DB.usuarios.find(x=>x.email && x.email.toLowerCase()===email && x.activo);
+    if(!u || u.passHash!==h){
+      if(err) err.textContent='Correo o contraseña incorrectos';
+      btn.disabled=false; btn.innerHTML='<i data-lucide="log-in"></i>Entrar'; icons(); return;
+    }
+    guardarSesion(u);
+    document.getElementById('loginScreen').style.display='none';
+    arrancarApp();
+  }catch(e){
+    if(err) err.textContent='No se pudo conectar con el servidor: '+e.message;
+    btn.disabled=false; btn.innerHTML='<i data-lucide="log-in"></i>Entrar'; icons();
   }
 }
-function pinPress(k){
-  const err=document.getElementById('pinErr'); if(err) err.textContent='';
-  if(k==='del') loginPin=loginPin.slice(0,-1);
-  else if(loginPin.length<4) loginPin+=k;
-  document.querySelectorAll('#pinDots .pin-dot').forEach((d,i)=>d.classList.toggle('on',loginPin.length>i));
-  if(loginPin.length===4){
-    const intento=loginPin;
-    setTimeout(()=>{
-      if(intento===loginSel.pin){
-        guardarSesion(loginSel);
-        document.getElementById('loginScreen').style.display='none';
-        arrancarApp();
-      } else {
-        loginPin='';
-        const e=document.getElementById('pinErr'); if(e) e.textContent='PIN incorrecto';
-        const dots=document.getElementById('pinDots'); if(dots){ dots.classList.add('shake'); setTimeout(()=>dots.classList.remove('shake'),400); }
-        document.querySelectorAll('#pinDots .pin-dot').forEach(d=>d.classList.remove('on'));
-      }
-    },110);
-  }
-}
-// Soporte de teclado fisico para el PIN
-document.addEventListener('keydown', e=>{
-  const scr=document.getElementById('loginScreen');
-  if(!scr || scr.style.display==='none' || !loginSel) return;
-  if(/^[0-9]$/.test(e.key)) pinPress(e.key);
-  else if(e.key==='Backspace') pinPress('del');
-});
 
 /* ---------- Chip de usuario + logout ---------- */
 function renderUserChip(){
   const el=document.getElementById('userChip'); if(!el||!SESION) return;
-  const u=USUARIOS.find(x=>x.id===SESION.id)||{icon:'user-round'};
   el.innerHTML=`
     <div class="user-chip">
-      <span class="uc-ic"><i data-lucide="${u.icon}"></i></span>
-      <div class="uc-info"><span class="uc-name">${esc(SESION.nombre)}</span></div>
-      <button class="uc-out" id="ucOut" title="Cerrar sesion"><i data-lucide="log-out"></i></button>
+      <span class="uc-ic"><i data-lucide="user-round"></i></span>
+      <div class="uc-info"><span class="uc-name">${esc(SESION.nombre||SESION.email)}</span></div>
+      <button class="uc-out" id="ucOut" title="Cerrar sesión"><i data-lucide="log-out"></i></button>
     </div>`;
   icons();
   const out=document.getElementById('ucOut'); if(out) out.onclick=cerrarSesion;
@@ -2209,6 +2268,7 @@ async function arrancarApp(){
   try{
     await withTimeout(loadAll(), 20000, 'Carga inicial');
     await seedIfEmpty();
+    try{ await loadUsuarios(); }catch(_){}
     ls.classList.add('hidden');
     document.getElementById('appShell').style.display='flex';
     renderUserChip();
