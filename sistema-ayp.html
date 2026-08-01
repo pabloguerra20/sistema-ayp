@@ -410,17 +410,30 @@ let DB = { productos:[], entidades:[], ventas:[], compras:[], cuentas:[], abonos
 
 /* ---------- Carga inicial (paralela) ---------- */
 async function loadAll(){
-  const [productos, entidades, ventas, vlineas, compras, clineas, cuentas, abonos, gastos] = await Promise.all([
-    sbGet('ayp_productos',   {order:'nombre',  asc:true}),
-    sbGet('ayp_entidades',   {order:'nombre',  asc:true}),
-    sbGet('ayp_ventas',      {order:'fecha',   asc:false}),
-    sbGet('ayp_venta_lineas',{order:'venta_id',asc:true}),
-    sbGet('ayp_compras',     {order:'fecha',   asc:false}),
-    sbGet('ayp_compra_lineas',{order:'compra_id',asc:true}),
-    sbGet('ayp_cuentas',     {order:'fecha_origen',asc:false}),
-    sbGet('ayp_abonos',      {order:'fecha',   asc:true}),
-    sbGet('ayp_gastos',      {order:'fecha',   asc:false}),
-  ]);
+  // Carga SECUENCIAL (una tabla a la vez) con progreso visible y límite por tabla.
+  // Evita atorones por 9 conexiones simultáneas y muestra exactamente dónde falla.
+  const pasos = [
+    ['ayp_productos',    'productos',     {order:'nombre',      asc:true}],
+    ['ayp_entidades',    'clientes',      {order:'nombre',      asc:true}],
+    ['ayp_ventas',       'ventas',        {order:'fecha',       asc:false}],
+    ['ayp_venta_lineas', 'detalle ventas',{order:'venta_id',    asc:true}],
+    ['ayp_compras',      'compras',       {order:'fecha',       asc:false}],
+    ['ayp_compra_lineas','detalle compras',{order:'compra_id',  asc:true}],
+    ['ayp_cuentas',      'cuentas',       {order:'fecha_origen',asc:false}],
+    ['ayp_abonos',       'abonos',        {order:'fecha',       asc:true}],
+    ['ayp_gastos',       'gastos',        {order:'fecha',       asc:false}],
+  ];
+  const R={};
+  for(let i=0;i<pasos.length;i++){
+    const [tabla,etq,opts]=pasos[i];
+    try{ setLoading('Cargando '+etq+'… ('+(i+1)+'/'+pasos.length+')'); }catch(_){}
+    R[tabla]=await withTimeout(sbGet(tabla,opts), 12000, 'Tabla '+etq);
+  }
+  try{ setLoading('Preparando…'); }catch(_){}
+  const productos=R['ayp_productos'], entidades=R['ayp_entidades'],
+        ventas=R['ayp_ventas'], vlineas=R['ayp_venta_lineas'],
+        compras=R['ayp_compras'], clineas=R['ayp_compra_lineas'],
+        cuentas=R['ayp_cuentas'], abonos=R['ayp_abonos'], gastos=R['ayp_gastos'];
 
   DB.productos = productos.map(p=>({
     id:p.id, nombre:p.nombre, categoria:p.categoria,
@@ -2266,7 +2279,7 @@ async function arrancarApp(){
   ls.classList.remove('hidden'); ls.style.display='flex';
   document.getElementById('loginScreen').style.display='none';
   try{
-    await withTimeout(loadAll(), 20000, 'Carga inicial');
+    await loadAll();  // loadAll ya trae timeout por tabla y progreso
     await seedIfEmpty();
     try{ await loadUsuarios(); }catch(_){}
     ls.classList.add('hidden');
